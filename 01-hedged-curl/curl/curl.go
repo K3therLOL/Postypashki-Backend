@@ -78,5 +78,5 @@ func FormatHedged(urls []string) int {
 			return http.StatusBadRequest
 	}
 
-	return 0
+	return http.StatusOK
 }
