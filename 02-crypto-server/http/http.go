@@ -1,7 +1,7 @@
 package http
 
-
 import (
+	"cryptoserver/clean/composure"
 	"fmt"
 	"net/http"
 	"github.com/go-chi/chi/v5"
@@ -10,26 +10,27 @@ import (
 )
 
 func authRoute(r chi.Router) {
+	auth := composure.NewAuth()
 	r.Route("/auth", func(r chi.Router) {
-		r.Post("/register", registerUser) // POST /auth/register
-		r.Post("/login",    loginUser)	  // POST /auth/login
+		r.Post("/register", auth.RegisterUser) // POST /auth/register
+		r.Post("/login",    auth.LoginUser)	  // POST /auth/login
 	})
 }
 
-func cryptoRoute(r chi.Router) {
-	r.Route("/crypto", func(r chi.Router) {
-		r.Get("/",  listCryptos) // GET  /crypto
-		r.Post("/", addCrypto)   // POST /crypto
-
-		r.Route("/{symbol}", func(r chi.Router) {
-			r.Get("/",        getCrypto) 	// GET    /crypto/{symbol}
-			r.Put("/refresh", updateCrypto) // PUT /crypto/{symbol}/refresh
-			r.Get("/history", getHistory)   // GET /crypto/{symbol}/history
-			r.Get("/stats",   getStats)     // GET /crypto/{symbol}/stats
-			r.Delete("/",     deleteCrypto) // DELETE /crypto/{symbol}
-		})
-	})
-}
+// func cryptoRoute(r chi.Router) {
+// 	r.Route("/crypto", func(r chi.Router) {
+// 		r.Get("/",  listCryptos) // GET  /crypto
+// 		r.Post("/", addCrypto)   // POST /crypto
+// 
+// 		r.Route("/{symbol}", func(r chi.Router) {
+// 			r.Get("/",        getCrypto) 	// GET    /crypto/{symbol}
+// 			r.Put("/refresh", updateCrypto) // PUT /crypto/{symbol}/refresh
+// 			r.Get("/history", getHistory)   // GET /crypto/{symbol}/history
+// 			r.Get("/stats",   getStats)     // GET /crypto/{symbol}/stats
+// 			r.Delete("/",     deleteCrypto) // DELETE /crypto/{symbol}
+// 		})
+// 	})
+// }
 
 func CreateAndRun() error {
 	r := chi.NewRouter()
@@ -47,5 +48,6 @@ func CreateAndRun() error {
 		panic("test")
 	})
 
+	authRoute(r)
 	return http.ListenAndServe(":8080", r)
 }
