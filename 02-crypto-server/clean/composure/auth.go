@@ -1,10 +1,10 @@
 package composure
 
 import (
-	"cryptoserver/usecase"
+	"cryptoserver/clean/usecase"
 	"cryptoserver/repository"
 	"cryptoserver/security"
-	"cryptoserver/controller"
+	"cryptoserver/clean/controller"
 )
 
 func NewAuth() *controller.Auth {

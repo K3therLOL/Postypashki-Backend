@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"cryptoserver/domain"
+	"cryptoserver/clean/domain"
 )
 
 type Rai struct {

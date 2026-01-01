@@ -1,7 +1,7 @@
 package usecase
 
 import (
-	"cryptoserver/domain"
+	"cryptoserver/clean/domain"
 	"errors"
 )
 
