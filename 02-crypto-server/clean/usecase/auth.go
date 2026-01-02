@@ -6,9 +6,9 @@ import (
 )
 
 var (
-	ErrUserAlreadyExists = errors.New("User already exists")
-	ErrUserNotExists = errors.New("Username doesn't exist. Please register first.")
-	ErrWrongPassword = errors.New("Wrong password.")
+	ErrUserAlreadyExists = errors.New("User already exists.")
+	ErrUserNotExists     = errors.New("User doesn't exist. Please register first.")
+	ErrWrongPassword     = errors.New("Wrong password.")
 )
 
 type Auth struct {
@@ -38,16 +38,16 @@ func (usecase *Auth) Register(username, password string) error {
 	return nil
 }
 
-func (usecase *Auth) Login(username, password string) (*domain.User, error) {
+func (usecase *Auth) Login(username, password string)  error {
 	user := usecase.ur.Exist(username)
 	if user == nil {
-		return nil, ErrUserNotExists
+		return ErrUserNotExists
 	}
 
 	hash := user.PasswordHash
 	if !usecase.h.CheckPassword(hash, password) {
-		return nil, ErrWrongPassword
+		return ErrWrongPassword
 	}
 
-	return user, nil
+	return nil
 }

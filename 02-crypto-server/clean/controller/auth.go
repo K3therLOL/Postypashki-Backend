@@ -1,17 +1,19 @@
 package controller
 
 import (
+	"time"
 	"fmt"
 	"errors"
 	"net/http"
 	"encoding/json"
 	"cryptoserver/clean/usecase"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 var (
-	ErrInvalidJson = errors.New("Invalid json")
-	ErrInvalidDTO  = errors.New("Username and password required")
+	ErrInvalidJson  = errors.New("Invalid json.")
+	ErrInvalidDTO   = errors.New("Username and password required.")
 )
 
 type userDTO struct { // DATA TRANSFER OBJECT
@@ -74,9 +76,7 @@ func (controller *Auth) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := jwt.New(jwt.SigningMethodHS256)
-	secret := []byte("super_secret_key_that_should_be_long_and_random") // fix this
-	tokenString, err := token.SignedString(secret)
+	tokenString, err := createToken()
 	if err != nil {
 		http.Error(w, formateError(err), http.StatusBadRequest)
 		return
@@ -87,4 +87,43 @@ func (controller *Auth) RegisterUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (controller *Auth) LoginUser(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	data := &userDTO{}
+	if err := json.NewDecoder(r.Body).Decode(data); err != nil {
+		http.Error(w, formateError(ErrInvalidJson), http.StatusBadRequest)
+		return
+	}
+
+	if data.Username == "" || data.Password == "" {
+		http.Error(w, formateError(ErrInvalidDTO), http.StatusBadRequest)
+		return
+	}
+
+	err := controller.ua.Login(data.Username, data.Password)
+	if err != nil {
+		http.Error(w, formateError(err), http.StatusUnauthorized)
+		return
+	}
+
+	tokenString, err := createToken()
+	if err != nil {
+		http.Error(w, formateError(err), http.StatusUnauthorized)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, formateToken(string(tokenString)))
+}
+
+func createToken() (string, error) {
+	claims := &jwt.RegisteredClaims{
+		Subject:   uuid.NewString(),
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(30 * time.Minute)),
+		IssuedAt:  jwt.NewNumericDate(time.Now()),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	secret := []byte("super_secret_key_that_should_be_long_and_random") // fix this, need security
+	return token.SignedString(secret)
 }
