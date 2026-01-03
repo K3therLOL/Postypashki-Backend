@@ -1,18 +1,14 @@
 package security
 
 import (
-	"cryptoserver/domain"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type BcryptHasher struct {
-	cost int
 }
 
-func NewHasher(cost int) domain.Hasher {
-	var h domain.Hasher
-	h = &BcryptHasher{cost: cost}
-	return h
+func NewHasher() *BcryptHasher {
+	return &BcryptHasher{}
 }
 
 func (h *BcryptHasher) HashPassword(password string) (string, error) {
