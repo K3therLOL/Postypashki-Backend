@@ -4,9 +4,12 @@ import (
 	"cryptoserver/clean/composure"
 	"fmt"
 	"net/http"
+	"context"
+	"strings"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func authRoute(r chi.Router) {
@@ -17,20 +20,47 @@ func authRoute(r chi.Router) {
 	})
 }
 
-// func cryptoRoute(r chi.Router) {
-// 	r.Route("/crypto", func(r chi.Router) {
-// 		r.Get("/",  listCryptos) // GET  /crypto
-// 		r.Post("/", addCrypto)   // POST /crypto
-// 
-// 		r.Route("/{symbol}", func(r chi.Router) {
-// 			r.Get("/",        getCrypto) 	// GET    /crypto/{symbol}
-// 			r.Put("/refresh", updateCrypto) // PUT /crypto/{symbol}/refresh
-// 			r.Get("/history", getHistory)   // GET /crypto/{symbol}/history
-// 			r.Get("/stats",   getStats)     // GET /crypto/{symbol}/stats
-// 			r.Delete("/",     deleteCrypto) // DELETE /crypto/{symbol}
-// 		})
-// 	})
-// }
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			http.Error(w, "You are not authorized.", http.StatusUnauthorized)
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		secret := []byte("super_secret_key_that_should_be_long_and_random") // fix this, need security
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
+			if token.Method.Alg() != "HS256" {
+				return nil, fmt.Errorf("algo %v, expected HS256\n", token.Header["alg"])
+			}
+			return secret, nil
+		})
+
+		if err != nil || !token.Valid {
+			http.Error(w, "Invalid token.", http.StatusUnauthorized)
+		}
+
+		const tokenKey = "token"
+		ctx := context.WithValue(context.Background(), tokenKey, token)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func cryptoRoute(r chi.Router) {
+	r.Route("/crypto", func(r chi.Router) {
+		r.Use(authMiddleware)
+//		r.Get("/",  listCryptos) // GET  /crypto
+//		r.Post("/", addCrypto)   // POST /crypto
+//
+//		r.Route("/{symbol}", func(r chi.Router) {
+//			r.Get("/",        getCrypto) 	// GET    /crypto/{symbol}
+//			r.Put("/refresh", updateCrypto) // PUT /crypto/{symbol}/refresh
+//			r.Get("/history", getHistory)   // GET /crypto/{symbol}/history
+//			r.Get("/stats",   getStats)     // GET /crypto/{symbol}/stats
+//			r.Delete("/",     deleteCrypto) // DELETE /crypto/{symbol}
+//		})
+	})
+}
 
 func CreateAndRun() error {
 	r := chi.NewRouter()
@@ -49,5 +79,6 @@ func CreateAndRun() error {
 	})
 
 	authRoute(r)
+	cryptoRoute(r)
 	return http.ListenAndServe(":8080", r)
 }
