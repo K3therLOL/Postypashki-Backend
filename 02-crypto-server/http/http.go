@@ -1,10 +1,11 @@
 package http
 
 import (
+	"cryptoserver/crypto"
 	"cryptoserver/clean/composure"
 	"fmt"
 	"net/http"
-	"context"
+	//"context"
 	"strings"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -16,7 +17,7 @@ func authRoute(r chi.Router) {
 	auth := composure.NewAuth()
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/register", auth.RegisterUser) // POST /auth/register
-		r.Post("/login",    auth.LoginUser)	  // POST /auth/login
+		r.Post("/login",    auth.LoginUser)	   // POST /auth/login
 	})
 }
 
@@ -25,6 +26,7 @@ func authMiddleware(next http.Handler) http.Handler {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 			http.Error(w, "You are not authorized.", http.StatusUnauthorized)
+			return
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
@@ -38,27 +40,29 @@ func authMiddleware(next http.Handler) http.Handler {
 
 		if err != nil || !token.Valid {
 			http.Error(w, "Invalid token.", http.StatusUnauthorized)
+			return
 		}
 
-		const tokenKey = "token"
-		ctx := context.WithValue(context.Background(), tokenKey, token)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		//const tokenKey = "token"
+		//ctx := context.WithValue(context.Background(), tokenKey, token)
+		next.ServeHTTP(w, r/*.WithContext(ctx)*/)
 	})
 }
 
 func cryptoRoute(r chi.Router) {
 	r.Route("/crypto", func(r chi.Router) {
 		r.Use(authMiddleware)
-//		r.Get("/",  listCryptos) // GET  /crypto
+		api := crypto.NewAPI()
+		r.Get("/",  api.ListCryptos) // GET  /crypto
 //		r.Post("/", addCrypto)   // POST /crypto
 //
-//		r.Route("/{symbol}", func(r chi.Router) {
-//			r.Get("/",        getCrypto) 	// GET    /crypto/{symbol}
+		r.Route("/{symbol}", func(r chi.Router) {
+			r.Get("/",        api.GetCrypto) 	// GET    /crypto/{symbol}
 //			r.Put("/refresh", updateCrypto) // PUT /crypto/{symbol}/refresh
 //			r.Get("/history", getHistory)   // GET /crypto/{symbol}/history
 //			r.Get("/stats",   getStats)     // GET /crypto/{symbol}/stats
 //			r.Delete("/",     deleteCrypto) // DELETE /crypto/{symbol}
-//		})
+		})
 	})
 }
 
