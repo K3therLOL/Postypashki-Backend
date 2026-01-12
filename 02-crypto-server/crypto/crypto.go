@@ -1,17 +1,17 @@
 package crypto
 
 import (
+	"context"
 	"cryptoserver/errorfmt"
-	"errors"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
-	"context"
-	"github.com/redis/go-redis/v9"
-	"github.com/go-chi/chi/v5"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -24,6 +24,7 @@ type API struct {
 	key string
 	client *http.Client
 	cache  *redis.Client
+	recordsCount int
 }
 
 type CryptoDTO struct {
@@ -33,8 +34,8 @@ type CryptoDTO struct {
 }
 
 type CoinDTO struct {
-	Symbol string 		`json:"symbol"`
-	Name string 		`json:"name"`
+	Symbol     string 		`json:"symbol"`
+	Name       string 		`json:"name"`
 	MarketData struct {
 		CurrentPrice struct {
 			Usd float64 `json:"usd"`
@@ -68,6 +69,29 @@ type OutputMem struct {
 	History []MemObject `json:"history"`
 }
 
+type StatsDTO struct {
+	CurrentPrice 			 float64 `json:"current_price"`
+	High24h                  float64 `json:"high_24h"`
+	Low24h 					 float64 `json:"low_24h"`
+	PriceChange24h 			 float64 `json:"price_change_24h"`
+	PriceChangePercentage24h float64 `json:"price_change_percentage_24h"`
+}
+
+type Record struct {
+	MinPrice           float64 `json:"min_price"`
+	MaxPrice           float64 `json:"max_price"`
+	AvgPrice           float64 `json:"avg_price"`
+	PriceChange        float64 `json:"price_change"`
+	PriceChangePercent float64 `json:"price_change_percent"`
+	RecordsCount       int     `json:"records_count"`
+} 
+
+type OutputStats struct {
+	Symbol       string  `json:"symbol"`
+	CurrentPrice float64 `json:"current_price"`
+	Stats        Record  `json:"stats"`
+}
+
 func NewAPI() *API {
 	api := &API{
 		rootURL: "https://api.coingecko.com/api/v3",
@@ -78,6 +102,7 @@ func NewAPI() *API {
 		cache: redis.NewClient(&redis.Options{
 			Addr: "localhost:6379",
 		}),
+		recordsCount: 100,
 	}
 
 	_, err := api.cache.Ping(context.Background()).Result()
@@ -90,17 +115,25 @@ func NewAPI() *API {
 	return api
 }
 
-func (api *API) ListCryptos(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-	url := fmt.Sprintf("%s/coins/list", api.rootURL)
+func (api *API) sendCryptoRequest(url string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
-		return
+		return nil, err
 	}
 
 	req.Header.Add("x-cg-demo-api-key", api.key)
 	resp, err := api.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func (api *API) ListCryptos(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	url := fmt.Sprintf("%s/coins/list", api.rootURL)
+	resp, err := api.sendCryptoRequest(url)
 	if err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
 		return
@@ -108,11 +141,8 @@ func (api *API) ListCryptos(w http.ResponseWriter, r *http.Request) {
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusTooManyRequests {
+	if resp.StatusCode != http.StatusOK {
 		http.Error(w, errorfmt.Jsonize(ErrLimitExceeded), http.StatusBadRequest)
-		return
-	} else if resp.StatusCode != http.StatusOK {
-		http.Error(w, errorfmt.Jsonize(ErrListCrypto), http.StatusBadRequest)
 		return
 	}
 
@@ -145,20 +175,14 @@ func (api *API) GetCrypto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	url := fmt.Sprintf("%s/coins/%s", api.rootURL, id)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
-		return
-	}
-
-	req.Header.Add("x-cg-demo-api-key", api.key)
-	resp, err := api.client.Do(req)
+	resp, err := api.sendCryptoRequest(url)
 	if err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
 		return
 	}
 
 	defer resp.Body.Close()
+
 	coin := CoinDTO{}
 	if err := json.NewDecoder(resp.Body).Decode(&coin); err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
@@ -198,14 +222,7 @@ func (api *API) GetHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	url := fmt.Sprintf("%s/coins/%s/market_chart?vs_currency=usd&days=1", api.rootURL, id)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
-		return
-	}
-
-	req.Header.Add("x-cg-demo-api-key", api.key)
-	resp, err := api.client.Do(req)
+	resp, err := api.sendCryptoRequest(url)
 	if err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
 		return
@@ -219,9 +236,11 @@ func (api *API) GetHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	formatedMem := OutputMem{}
-	formatedMem.Symbol = symbol
-	formatedMem.History = make([]MemObject, len(history.Prices))
+	formatedMem := OutputMem{
+		Symbol: symbol,
+		History: make([]MemObject, len(history.Prices)),
+	}
+
 	for i, price := range history.Prices {
 		valPrice, ms := price[1], int64(price[0])
 		formatedMem.History[i] = MemObject{
@@ -233,6 +252,62 @@ func (api *API) GetHistory(w http.ResponseWriter, r *http.Request) {
 	clientJSON, err := json.Marshal(formatedMem)
 	if err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, string(clientJSON))
+}
+
+func (api *API) GetStats(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	symbol := chi.URLParam(r, "symbol")
+	id, err := api.getID(symbol)
+	if err != nil {
+		http.Error(w, errorfmt.Jsonize(err), http.StatusNotFound)
+		return
+	}
+
+	url := fmt.Sprintf("%s/coins/markets?vs_currency=usd&ids=%s&symbols=%s", api.rootURL, id, symbol)
+	resp, err := api.sendCryptoRequest(url)
+	if err != nil {
+		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, errorfmt.Jsonize(ErrLimitExceeded), http.StatusBadRequest)
+		return
+	}
+
+	statsList := make([]StatsDTO, 1)
+	if err := json.NewDecoder(resp.Body).Decode(&statsList); err != nil {
+		fmt.Println("json err")
+		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
+		return
+	}
+	
+	stats := statsList[0]
+	formatedStats := OutputStats {
+		Symbol: symbol,
+		CurrentPrice: stats.CurrentPrice,
+		Stats: Record {
+			MinPrice: stats.Low24h,
+			MaxPrice: stats.High24h,
+			AvgPrice: (stats.Low24h + stats.High24h) / 2,
+			PriceChange: stats.PriceChange24h,
+			PriceChangePercent: stats.PriceChangePercentage24h,
+			RecordsCount: api.recordsCount,
+		},
+	}
+
+	clientJSON, err := json.Marshal(formatedStats)
+	if err != nil {
+		fmt.Println("json err")
+		http.Error(w, errorfmt.Jsonize(err), http.StatusBadGateway)
 		return
 	}
 
