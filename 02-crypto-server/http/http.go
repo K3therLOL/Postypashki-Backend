@@ -59,8 +59,8 @@ func cryptoRoute(r chi.Router) {
 		r.Route("/{symbol}", func(r chi.Router) {
 			r.Get("/",        api.GetCrypto) 	// GET    /crypto/{symbol}
 //			r.Put("/refresh", updateCrypto) // PUT /crypto/{symbol}/refresh
-//			r.Get("/history", getHistory)   // GET /crypto/{symbol}/history
-//			r.Get("/stats",   getStats)     // GET /crypto/{symbol}/stats
+			r.Get("/history", api.GetHistory)   // GET /crypto/{symbol}/history
+			r.Get("/stats",   api.GetStats)     // GET /crypto/{symbol}/stats
 //			r.Delete("/",     deleteCrypto) // DELETE /crypto/{symbol}
 		})
 	})
