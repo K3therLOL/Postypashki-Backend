@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"strings"
 	"errors"
 	"context"
 	"encoding/json"
@@ -30,6 +31,7 @@ func (api *API) cacheCryptoIDSet(cryptos []CryptoDTO) {
 func (api *API) getID(symbol string) (string, error) {
 	id, err := api.cache.Get(ctx, symbol).Result()
 	if err == nil {
+		fmt.Println("cache boom")
 		return id, nil
 	}
 
@@ -52,7 +54,8 @@ func (api *API) getID(symbol string) (string, error) {
 	}
 
 	for _, crypto := range cryptos.Coins {
-		if id := crypto.Id; id != "" {
+		if strings.EqualFold(crypto.Symbol, symbol) {
+			id := crypto.Id	
 			return id, nil
 		}
 	}
