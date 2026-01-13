@@ -161,7 +161,7 @@ func (api *API) ListCryptos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, string(clientJSON))
+	w.Write(clientJSON)
 }
 
 func (api *API) GetCrypto(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +208,7 @@ func (api *API) GetCrypto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, string(clientJSON))
+	w.Write(clientJSON)
 }	
 
 func (api *API) GetHistory(w http.ResponseWriter, r *http.Request) {
@@ -256,7 +256,34 @@ func (api *API) GetHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, string(clientJSON))
+	w.Write(clientJSON)
+}
+
+func (api *API) countAvgPrice(id string) float64 {
+	url := fmt.Sprintf("%s/coins/%s/market_chart?vs_currency=usd&days=1", api.rootURL, id)
+	resp, err := api.sendCryptoRequest(url)
+	if err != nil {
+		return 0.0
+	}
+
+	defer resp.Body.Close()
+
+	history := HistoryDTO{}
+	if err := json.NewDecoder(resp.Body).Decode(&history); err != nil {
+		return 0.0
+	}
+
+	avg := 0.0
+	for _, priceObject := range history.Prices {
+		price := priceObject[1]
+		avg += price
+	}
+	if len(history.Prices) == 0 {
+		return 0.0
+	}
+	avg /= float64(len(history.Prices))
+
+	return avg
 }
 
 func (api *API) GetStats(w http.ResponseWriter, r *http.Request) {
@@ -297,7 +324,7 @@ func (api *API) GetStats(w http.ResponseWriter, r *http.Request) {
 		Stats: Record {
 			MinPrice: stats.Low24h,
 			MaxPrice: stats.High24h,
-			AvgPrice: (stats.Low24h + stats.High24h) / 2,
+			AvgPrice: api.countAvgPrice(id),
 			PriceChange: stats.PriceChange24h,
 			PriceChangePercent: stats.PriceChangePercentage24h,
 			RecordsCount: api.recordsCount,
@@ -312,5 +339,5 @@ func (api *API) GetStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, string(clientJSON))
+	w.Write(clientJSON)
 }
