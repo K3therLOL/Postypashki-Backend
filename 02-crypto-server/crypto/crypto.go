@@ -12,10 +12,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
-	ErrListCrypto = errors.New("ListCrypto executed wrong.")
+	ErrListCrypto    = errors.New("ListCrypto executed wrong.")
 	ErrLimitExceeded = errors.New("Request limit exceeded.")
 )
 
@@ -48,7 +49,7 @@ type CryptoDTOList struct {
 	Coins []CryptoDTO `json:"coins"`
 }
 
-type OutputCoin struct {
+type CoinResponse struct {
 	Symbol string      	 `json:"symbol"`
 	Name string        	 `json:"name"`
 	CurrentPrice float64 `json:"current_price"`
@@ -59,15 +60,15 @@ type HistoryDTO struct {
 	Prices [][]float64 `json:"prices"`
 }
 
-type MemObject struct {
+type HistoryObject struct {
 	Price     float64   `json:"price"`
 	Timestamp time.Time `json:"timestamp"`
 }  
 
-type OutputMem struct {
+type HistoryResponse struct {
 	Symbol string      	`json:"symbol"`
-	History []MemObject `json:"history"`
-}
+	History []HistoryObject `json:"history"`
+} 
 
 type StatsDTO struct {
 	CurrentPrice 			 float64 `json:"current_price"`
@@ -86,7 +87,7 @@ type Record struct {
 	RecordsCount       int     `json:"records_count"`
 } 
 
-type OutputStats struct {
+type StatsResponse struct {
 	Symbol       string  `json:"symbol"`
 	CurrentPrice float64 `json:"current_price"`
 	Stats        Record  `json:"stats"`
@@ -142,7 +143,7 @@ func (api *API) ListCryptos(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		http.Error(w, errorfmt.Jsonize(ErrLimitExceeded), http.StatusBadRequest)
+		http.Error(w, errorfmt.Jsonize(ErrLimitExceeded), resp.StatusCode)
 		return
 	}
 
@@ -194,7 +195,7 @@ func (api *API) GetCrypto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	formatedCoin := OutputCoin{
+	formatedCoin := CoinResponse{
 		Symbol: coin.Symbol,
 		Name: coin.Name,
 		CurrentPrice: coin.MarketData.CurrentPrice.Usd,
@@ -236,20 +237,20 @@ func (api *API) GetHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	formatedMem := OutputMem{
+	formatedHistory := HistoryResponse{
 		Symbol: symbol,
-		History: make([]MemObject, len(history.Prices)),
+		History: make([]HistoryObject, len(history.Prices)),
 	}
 
 	for i, price := range history.Prices {
 		valPrice, ms := price[1], int64(price[0])
-		formatedMem.History[i] = MemObject{
+		formatedHistory.History[i] = HistoryObject{
 			Price: valPrice,
 			Timestamp: time.UnixMilli(ms).UTC(),
 		}
 	}
 
-	clientJSON, err := json.Marshal(formatedMem)
+	clientJSON, err := json.Marshal(formatedHistory)
 	if err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
 		return
@@ -306,7 +307,7 @@ func (api *API) GetStats(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		http.Error(w, errorfmt.Jsonize(ErrLimitExceeded), http.StatusBadRequest)
+		http.Error(w, errorfmt.Jsonize(ErrLimitExceeded), resp.StatusCode)
 		return
 	}
 
@@ -318,7 +319,7 @@ func (api *API) GetStats(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	stats := statsList[0]
-	formatedStats := OutputStats {
+	formatedStats := StatsResponse {
 		Symbol: symbol,
 		CurrentPrice: stats.CurrentPrice,
 		Stats: Record {
@@ -333,11 +334,104 @@ func (api *API) GetStats(w http.ResponseWriter, r *http.Request) {
 
 	clientJSON, err := json.Marshal(formatedStats)
 	if err != nil {
-		fmt.Println("json err")
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadGateway)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
+	w.Write(clientJSON)
+}
+
+type WatchAttributes struct {
+	Symbol string 		 `json:"symbol"` 
+	CurrentPrice float64 `json:"current_price"` 
+	History []HistoryObject  `json:"history"` 
+}
+
+func (api *API) WatchCrypto(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	
+	var body struct{ Symbol string `json:"symbol"` }
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	id, err := api.getID(body.Symbol)
+	if err != nil {
+		http.Error(w, errorfmt.Jsonize(err), http.StatusNotFound)
+		return
+	}
+
+	g, ctx := errgroup.WithContext(context.Background())
+	priceChan := make(chan float64, 1)
+	g.Go(func() error {
+		defer close(priceChan)
+		url := fmt.Sprintf("%s/coins/%s", api.rootURL, id)
+		resp, err := api.sendCryptoRequest(url)
+		if err != nil {
+			return err
+		}
+
+		defer resp.Body.Close()
+
+		coin := CoinDTO{}
+		if err := json.NewDecoder(resp.Body).Decode(&coin); err != nil {
+			return err
+		}
+		
+		if coin.Symbol == "" && coin.Name == "" {
+			return err
+		}
+
+		priceChan <- coin.MarketData.CurrentPrice.Usd
+
+		return nil
+	})
+
+	historyChan := make(chan []HistoryObject, 1)
+	g.Go(func() error {
+		defer close(historyChan)
+		url := fmt.Sprintf("%s/coins/%s/market_chart?vs_currency=usd&days=1", api.rootURL, id)
+		resp, err := api.sendCryptoRequest(url)
+		if err != nil {
+			return err
+		}
+
+		defer resp.Body.Close()
+
+		history := HistoryDTO{}
+		if err := json.NewDecoder(resp.Body).Decode(&history); err != nil {
+			return err
+		}
+
+		newHistory := make([]HistoryObject, len(history.Prices))
+		for i, obj := range history.Prices {
+			price, ms := obj[1], int64(obj[0])
+			newHistory[i].Price = price
+			newHistory[i].Timestamp = time.UnixMilli(ms).UTC()
+		}
+
+		historyChan <- newHistory
+		return nil
+	})
+
+
+	currentPrice := <- priceChan
+	history := <- historyChan
+
+	wa := WatchAttributes {
+		Symbol: body.Symbol,
+		CurrentPrice: currentPrice,
+		History: history,
+	}
+
+	clientJSON, err := json.Marshal(wa)
+	if err != nil {
+		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
 	w.Write(clientJSON)
 }
