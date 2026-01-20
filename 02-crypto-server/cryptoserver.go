@@ -1,14 +1,14 @@
 package main
 
 import (
-	"cryptoserver/http"
+	"cryptoserver/rest"
 	"log"
 )
 
 func main() {
 	log.Println("Server started on port :8080")
 
-	if err := http.CreateAndRun(); err != nil {
+	if err := rest.CreateAndRun(); err != nil {
 		log.Fatal(err)
 	}
 }
