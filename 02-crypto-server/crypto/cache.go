@@ -12,7 +12,6 @@ import (
 )
 
 var ctx = context.Background()
-
 var ErrNoID = errors.New("No id by your symbol.")
 
 func (api *API) cacheCryptoID(crypto CryptoDTO) {
