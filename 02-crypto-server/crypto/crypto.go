@@ -30,7 +30,6 @@ type API struct {
 	ctx          context.Context
 	client       *http.Client
 	cache        *redis.Client
-	attributes   map[string]Snap
 	recordsCount int
 }
 
@@ -49,10 +48,6 @@ type CoinDTO struct {
 		} `json:"current_price"`
 	} `json:"market_data"`
 	LastUpdated string `json:"last_updated"`
-}
-
-type CryptoDTOList struct {
-	Coins []CryptoDTO `json:"coins"`
 }
 
 type CoinResponse struct {
@@ -105,12 +100,11 @@ func NewAPI() *API {
 		key:     "",
 		ctx:     context.Background(),
 		client: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: 15 * time.Second,
 		},
 		cache: redis.NewClient(&redis.Options{
 			Addr: "localhost:6379",
 		}),
-		attributes:   make(map[string]Snap),
 		recordsCount: 100,
 	}
 
@@ -388,10 +382,10 @@ func (api *API) WatchCrypto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, exists := api.attributes[id]; exists {
-		http.Error(w, errorfmt.Jsonize(ErrCryptoAlreadyWatched), http.StatusConflict)
-		return
-	}
+	//if _, exists := api.attributes[id]; exists {
+	//	http.Error(w, errorfmt.Jsonize(ErrCryptoAlreadyWatched), http.StatusConflict)
+	//	return
+	//}
 
 	coin, history, err := api.getCoinAndHistory(id)
 
