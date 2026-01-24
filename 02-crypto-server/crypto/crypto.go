@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -15,9 +16,15 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const snapPrefix = "snap:"
+const (
+	repoPrefix         = "repo:"
+	coinCachePrefix    = "coin:"
+	historyCachePrefix = "history:"
+	statsCachePrefix   = "stats:"
+)
 
 var (
+	ErrNoID                 = errors.New("No id by your symbol.")
 	ErrListCrypto           = errors.New("ListCrypto executed wrong.")
 	ErrLimitExceeded        = errors.New("Request limit exceeded.")
 	ErrCryptoAlreadyWatched = errors.New("Crypto has been already watched.")
@@ -37,6 +44,10 @@ type CryptoDTO struct {
 	Id     string `json:"id"`
 	Symbol string `json:"symbol"`
 	Name   string `json:"name"`
+}
+
+type CryptoDTOList struct {
+	Coins []CryptoDTO `json:"coins"`
 }
 
 type CoinDTO struct {
@@ -114,6 +125,13 @@ func NewAPI() *API {
 		return nil
 	}
 
+	iter := api.cache.Scan(api.ctx, 0, "*", 10).Iterator()
+
+	for iter.Next(api.ctx) {
+		fmt.Println("Found Hash key:", iter.Val())
+	}
+
+	//api.cache.FlushDB(api.ctx)
 	log.Println("Successful connection to redis.")
 	return api
 }
@@ -121,6 +139,54 @@ func NewAPI() *API {
 func (api *API) BackgroundCaching() {
 	const requestLimit = 15
 	const timeout = 60
+}
+
+func (api *API) cacheCryptoID(crypto CryptoDTO) {
+	err := api.cache.SetNX(api.ctx, crypto.Symbol, crypto.Id, 30*time.Minute).Err()
+	if err != nil {
+		log.Println(err.Error())
+	}
+}
+
+func (api *API) cacheCryptoIDSet(cryptos []CryptoDTO) {
+	for _, crypto := range cryptos {
+		api.cacheCryptoID(crypto)
+	}
+}
+
+func (api *API) getID(symbol string) (string, error) {
+	id, err := api.cache.Get(api.ctx, symbol).Result()
+	if err == nil {
+		fmt.Println("cache boom")
+		return id, nil
+	}
+
+	// CACHE MISS
+	url := fmt.Sprintf("%s/search?query=%s", api.rootURL, symbol)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("x-cg-demo-api-key", api.key)
+
+	resp, err := api.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	cryptos := CryptoDTOList{}
+	if err := json.NewDecoder(resp.Body).Decode(&cryptos); err != nil {
+		return "", err
+	}
+
+	for _, crypto := range cryptos.Coins {
+		if strings.EqualFold(crypto.Symbol, symbol) {
+			id := crypto.Id
+			return id, nil
+		}
+	}
+
+	return "", ErrNoID
 }
 
 func (api *API) sendCryptoRequest(url string) (*http.Response, error) {
@@ -142,7 +208,7 @@ func (api *API) ListCryptos(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	const keysPerRequest = 10
-	iter := api.cache.Scan(api.ctx, 0, snapPrefix+"*", keysPerRequest).Iterator()
+	iter := api.cache.Scan(api.ctx, 0, repoPrefix+"*", keysPerRequest).Iterator()
 	cryptos := make([]WatchAttributes, 1)
 	for iter.Next(api.ctx) {
 		key := iter.Val()
@@ -181,6 +247,14 @@ func (api *API) GetCrypto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	key := coinCachePrefix + id
+	cachedJSON, err := api.cache.Get(api.ctx, key).Result()
+	if cachedJSON != "" && err == nil {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(cachedJSON))
+		return
+	}
+
 	url := fmt.Sprintf("%s/coins/%s", api.rootURL, id)
 	resp, err := api.sendCryptoRequest(url)
 	if err != nil {
@@ -214,6 +288,8 @@ func (api *API) GetCrypto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	api.cache.SetNX(api.ctx, key, clientJSON, 15*time.Minute)
+
 	w.WriteHeader(http.StatusOK)
 	w.Write(clientJSON)
 }
@@ -225,6 +301,14 @@ func (api *API) GetHistory(w http.ResponseWriter, r *http.Request) {
 	id, err := api.getID(symbol)
 	if err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusNotFound)
+		return
+	}
+
+	key := historyCachePrefix + id
+	cachedJSON, err := api.cache.Get(api.ctx, key).Result()
+	if cachedJSON != "" && err == nil {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(cachedJSON))
 		return
 	}
 
@@ -261,6 +345,8 @@ func (api *API) GetHistory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
 		return
 	}
+
+	api.cache.SetNX(api.ctx, key, clientJSON, 15*time.Minute)
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(clientJSON)
@@ -300,6 +386,15 @@ func (api *API) GetStats(w http.ResponseWriter, r *http.Request) {
 	id, err := api.getID(symbol)
 	if err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusNotFound)
+		return
+	}
+
+	key := statsCachePrefix + id
+	cachedJSON, err := api.cache.Get(api.ctx, key).Result()
+	if cachedJSON != "" && err == nil {
+		log.Println("stats cached hitted")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(cachedJSON))
 		return
 	}
 
@@ -343,6 +438,8 @@ func (api *API) GetStats(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadGateway)
 		return
 	}
+
+	api.cache.SetNX(api.ctx, key, clientJSON, 15*time.Minute)
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(clientJSON)
@@ -408,14 +505,13 @@ func (api *API) WatchCrypto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := snapPrefix + id
+	key := repoPrefix + id
 	set, err := api.cache.SetNX(api.ctx, key, clientJSON, 15*time.Minute).Result()
 	if err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
 		return
-	}
-	if !set {
-		http.Error(w, errorfmt.Jsonize(ErrCryptoAlreadyWatched), http.StatusBadRequest)
+	} else if !set {
+		http.Error(w, errorfmt.Jsonize(ErrCryptoAlreadyWatched), http.StatusConflict)
 		return
 	}
 
@@ -491,6 +587,9 @@ func (api *API) RefreshCrypto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	coin, history, err := api.getCoinAndHistory(id)
+	if coin.Symbol == "" && coin.Name == "" || err != nil {
+		return
+	}
 
 	snap := Snap{
 		Crypto: WatchAttributes{
@@ -502,16 +601,13 @@ func (api *API) RefreshCrypto(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	// rewriting attributes
-	//api.attributes[id] = snap
-
 	clientJSON, err := json.Marshal(snap)
 	if err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
 		return
 	}
 
-	key := snapPrefix + id
+	key := repoPrefix + id
 	if err := api.cache.Set(api.ctx, key, clientJSON, 15*time.Minute).Err(); err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
 		return
@@ -529,12 +625,7 @@ func (api *API) DeleteCrypto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//if _, exists := api.attributes[id]; !exists {
-	//	http.Error(w, errorfmt.Jsonize(ErrCryptoNotWatched), http.StatusNotFound)
-	//	return
-	//}
-
-	key := snapPrefix + id
+	key := repoPrefix + id
 	cnt, err := api.cache.Exists(api.ctx, key).Result()
 	if err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
