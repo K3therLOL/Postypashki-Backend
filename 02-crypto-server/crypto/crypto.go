@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -44,11 +45,16 @@ type ScheduleSettings struct {
 	IntervalSeconds int  `json:"interval_seconds"`
 }
 
+type ScheduleTrigger struct {
+	UpdatedCount int       `json:"updated_count"`
+	Timestamp    time.Time `json:"timestamp"`
+}
+
 type Schedule struct {
 	enabled         bool
 	intervalSeconds int
 	lastUpdate      time.Time
-	updatedCount    int
+	updatedCount    atomic.Int64
 }
 
 type API struct {
@@ -149,11 +155,6 @@ func NewAPI() *API {
 	// api.cache.FlushDB(api.ctx)
 	log.Println("Successful connection to redis.")
 	return api
-}
-
-func (api *API) BackgroundCaching() {
-	const requestLimit = 15
-	const timeout = 60
 }
 
 func (api *API) cacheCryptoID(crypto CryptoDTO) {
@@ -510,11 +511,6 @@ func (api *API) WatchCrypto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//if _, exists := api.attributes[id]; exists {
-	//	http.Error(w, errorfmt.Jsonize(ErrCryptoAlreadyWatched), http.StatusConflict)
-	//	return
-	//}
-
 	coin, history, err := api.getCoinAndHistory(id)
 
 	snap := Snap{
@@ -680,13 +676,13 @@ func (api *API) GetSchedule(w http.ResponseWriter, r *http.Request) {
 	schedule := ScheduleDTO{
 		Enabled:         api.schedule.enabled,
 		IntervalSeconds: api.schedule.intervalSeconds,
-		LastUpdate:      api.schedule.lastUpdate,
+		LastUpdate:      api.schedule.lastUpdate.Round(time.Second),
 	}
 
 	if api.schedule.lastUpdate.IsZero() {
 		schedule.NextUpdate = api.schedule.lastUpdate
 	} else {
-		schedule.NextUpdate = api.schedule.lastUpdate.Add(time.Duration(api.schedule.intervalSeconds) * time.Second)
+		schedule.NextUpdate = api.schedule.lastUpdate.Add(time.Duration(api.schedule.intervalSeconds) * time.Second).Round(time.Second)
 	}
 
 	clientJSON, err := json.Marshal(schedule)
@@ -709,7 +705,6 @@ func (api *API) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	if settings.IntervalSeconds < 10 || settings.IntervalSeconds > 3600 {
 		http.Error(w, errorfmt.Jsonize(ErrIntervalNotInRange), http.StatusBadRequest)
 		return
-
 	}
 
 	api.schedule.enabled = settings.Enabled
@@ -723,4 +718,26 @@ func (api *API) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(clientJSON)
+}
+
+func (api *API) TriggerUpdate(w http.ResponseWriter, r *http.Request) {
+	api.schedule.updatedCount.Add(1)
+
+	trigger := ScheduleTrigger{
+		UpdatedCount: int(api.schedule.updatedCount.Load()),
+		Timestamp:    time.Now().UTC().Round(time.Second),
+	}
+
+	clientJSON, err := json.Marshal(trigger)
+	if err != nil {
+		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(clientJSON)
+}
+
+func (api *API) updatePrices() {
+
 }
