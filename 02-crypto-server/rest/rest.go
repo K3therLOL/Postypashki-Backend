@@ -34,7 +34,7 @@ func authMiddleware(next http.Handler) http.Handler {
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		secret := []byte("super_secret_key_that_should_be_long_and_random") // fix this, need security
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
-			if token.Method.Alg() != "HS256" {
+			if token.Method.Alg() != "HS256" { // alg: none attack -> defend
 				return nil, fmt.Errorf("algo %v, expected HS256\n", token.Header["alg"])
 			}
 			return secret, nil
@@ -52,19 +52,25 @@ func authMiddleware(next http.Handler) http.Handler {
 }
 
 func cryptoRoute(r chi.Router) {
+	api := crypto.NewAPI()
 	r.Route("/crypto", func(r chi.Router) {
 		r.Use(authMiddleware)
-		api := crypto.NewAPI()
 		r.Get("/", api.ListCryptos)  // GET  /crypto
 		r.Post("/", api.WatchCrypto) // POST /crypto
 
 		r.Route("/{symbol}", func(r chi.Router) {
-			r.Get("/", api.GetCrypto)            // GET    /crypto/{symbol}
-			r.Put("/refresh", api.RefreshCrypto) // PUT /crypto/{symbol}/refresh
-			r.Get("/history", api.GetHistory)    // GET /crypto/{symbol}/history
-			r.Get("/stats", api.GetStats)        // GET /crypto/{symbol}/stats
-			r.Delete("/", api.DeleteCrypto)      // DELETE /crypto/{symbol}
+			r.Get("/", api.GetCrypto)           // GET    /crypto/{symbol}
+			r.Put("/refresh", api.UpdateCrypto) // PUT /crypto/{symbol}/refresh
+			r.Get("/history", api.GetHistory)   // GET /crypto/{symbol}/history
+			r.Get("/stats", api.GetStats)       // GET /crypto/{symbol}/stats
+			r.Delete("/", api.DeleteCrypto)     // DELETE /crypto/{symbol}
 		})
+	})
+
+	r.Route("/schedule", func(r chi.Router) {
+		r.Get("/", api.GetSchedule)           // GET  /schedule
+		r.Put("/", api.UpdateSchedule)        // PUT  /schedule
+		r.Post("/trigger", api.TriggerUpdate) // POST /schedule/trigger
 	})
 }
 
