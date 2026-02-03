@@ -29,7 +29,20 @@ var (
 	ErrLimitExceeded        = errors.New("Request limit exceeded.")
 	ErrCryptoAlreadyWatched = errors.New("Crypto has been already watched.")
 	ErrCryptoNotWatched     = errors.New("Crypto doesn't watched yet.")
+	ErrIntervalNotInRange   = errors.New("Interval isn't in range [10, 3600].")
 )
+
+type ScheduleDTO struct {
+	Enabled         bool      `json:"enabled"`
+	IntervalSeconds int       `json:"interval_seconds"`
+	LastUpdate      time.Time `json:"last_update"`
+	NextUpdate      time.Time `json:"next_update"`
+}
+
+type ScheduleSettings struct {
+	Enabled         bool `json:"enabled"`
+	IntervalSeconds int  `json:"interval_seconds"`
+}
 
 type Schedule struct {
 	enabled         bool
@@ -661,4 +674,53 @@ func (api *API) DeleteCrypto(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("{}"))
+}
+
+func (api *API) GetSchedule(w http.ResponseWriter, r *http.Request) {
+	schedule := ScheduleDTO{
+		Enabled:         api.schedule.enabled,
+		IntervalSeconds: api.schedule.intervalSeconds,
+		LastUpdate:      api.schedule.lastUpdate,
+	}
+
+	if api.schedule.lastUpdate.IsZero() {
+		schedule.NextUpdate = api.schedule.lastUpdate
+	} else {
+		schedule.NextUpdate = api.schedule.lastUpdate.Add(time.Duration(api.schedule.intervalSeconds) * time.Second)
+	}
+
+	clientJSON, err := json.Marshal(schedule)
+	if err != nil {
+		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(clientJSON)
+}
+
+func (api *API) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
+	settings := ScheduleSettings{}
+	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
+		return
+	}
+
+	if settings.IntervalSeconds < 10 || settings.IntervalSeconds > 3600 {
+		http.Error(w, errorfmt.Jsonize(ErrIntervalNotInRange), http.StatusBadRequest)
+		return
+
+	}
+
+	api.schedule.enabled = settings.Enabled
+	api.schedule.intervalSeconds = settings.IntervalSeconds
+
+	clientJSON, err := json.Marshal(settings)
+	if err != nil {
+		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(clientJSON)
 }

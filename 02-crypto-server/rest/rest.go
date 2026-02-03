@@ -3,16 +3,21 @@ package rest
 import (
 	"cryptoserver/clean/composure"
 	"cryptoserver/crypto"
+	"cryptoserver/errorfmt"
+	"errors"
 	"fmt"
 	"net/http"
-
-	//"context"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/golang-jwt/jwt/v5"
+)
+
+var (
+	ErrNotAuthorized = errors.New("You are not authorized.")
+	ErrInvalidToken  = errors.New("Invalid token.")
 )
 
 func authRoute(r chi.Router) {
@@ -27,7 +32,7 @@ func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			http.Error(w, "You are not authorized.", http.StatusUnauthorized)
+			http.Error(w, errorfmt.Jsonize(ErrNotAuthorized), http.StatusUnauthorized)
 			return
 		}
 
@@ -41,13 +46,11 @@ func authMiddleware(next http.Handler) http.Handler {
 		})
 
 		if err != nil || !token.Valid {
-			http.Error(w, "Invalid token.", http.StatusUnauthorized)
+			http.Error(w, errorfmt.Jsonize(ErrInvalidToken), http.StatusUnauthorized)
 			return
 		}
 
-		//const tokenKey = "token"
-		//ctx := context.WithValue(context.Background(), tokenKey, token)
-		next.ServeHTTP(w, r /*.WithContext(ctx)*/)
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -68,9 +71,10 @@ func cryptoRoute(r chi.Router) {
 	})
 
 	r.Route("/schedule", func(r chi.Router) {
-		r.Get("/", api.GetSchedule)           // GET  /schedule
-		r.Put("/", api.UpdateSchedule)        // PUT  /schedule
-		r.Post("/trigger", api.TriggerUpdate) // POST /schedule/trigger
+		r.Use(authMiddleware)
+		r.Get("/", api.GetSchedule)    // GET  /schedule
+		r.Put("/", api.UpdateSchedule) // PUT  /schedule
+		//r.Post("/trigger", api.TriggerUpdate) // POST /schedule/trigger
 	})
 }
 
