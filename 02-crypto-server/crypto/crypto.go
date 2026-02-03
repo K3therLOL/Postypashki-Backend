@@ -31,6 +31,13 @@ var (
 	ErrCryptoNotWatched     = errors.New("Crypto doesn't watched yet.")
 )
 
+type Schedule struct {
+	enabled         bool
+	intervalSeconds int
+	lastUpdate      time.Time
+	updatedCount    int
+}
+
 type API struct {
 	rootURL      string
 	key          string
@@ -38,6 +45,7 @@ type API struct {
 	client       *http.Client
 	cache        *redis.Client
 	recordsCount int
+	schedule     Schedule
 }
 
 type CryptoDTO struct {
@@ -125,13 +133,7 @@ func NewAPI() *API {
 		return nil
 	}
 
-	iter := api.cache.Scan(api.ctx, 0, "*", 10).Iterator()
-
-	for iter.Next(api.ctx) {
-		fmt.Println("Found Hash key:", iter.Val())
-	}
-
-	//api.cache.FlushDB(api.ctx)
+	// api.cache.FlushDB(api.ctx)
 	log.Println("Successful connection to redis.")
 	return api
 }
@@ -157,7 +159,7 @@ func (api *API) cacheCryptoIDSet(cryptos []CryptoDTO) {
 func (api *API) getID(symbol string) (string, error) {
 	id, err := api.cache.Get(api.ctx, symbol).Result()
 	if err == nil {
-		fmt.Println("cache boom")
+		// CACHE HIT
 		return id, nil
 	}
 
@@ -264,6 +266,12 @@ func (api *API) GetCrypto(w http.ResponseWriter, r *http.Request) {
 
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println(resp.Body)
+		http.Error(w, errorfmt.Jsonize(ErrLimitExceeded), resp.StatusCode)
+		return
+	}
+
 	coin := CoinDTO{}
 	if err := json.NewDecoder(resp.Body).Decode(&coin); err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusNotFound)
@@ -306,7 +314,9 @@ func (api *API) GetHistory(w http.ResponseWriter, r *http.Request) {
 
 	key := historyCachePrefix + id
 	cachedJSON, err := api.cache.Get(api.ctx, key).Result()
-	if cachedJSON != "" && err == nil {
+	cachedHistory := HistoryResponse{}
+	json.Unmarshal([]byte(cachedJSON), &cachedHistory)
+	if cachedHistory.Symbol != "" && len(cachedHistory.History) > 0 && err == nil {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(cachedJSON))
 		return
@@ -320,6 +330,12 @@ func (api *API) GetHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println(resp.Body)
+		http.Error(w, errorfmt.Jsonize(ErrLimitExceeded), resp.StatusCode)
+		return
+	}
 
 	history := HistoryDTO{}
 	if err := json.NewDecoder(resp.Body).Decode(&history); err != nil {
@@ -339,6 +355,7 @@ func (api *API) GetHistory(w http.ResponseWriter, r *http.Request) {
 			Timestamp: time.UnixMilli(ms).UTC(),
 		}
 	}
+	formatedHistory.History = formatedHistory.History[:api.recordsCount]
 
 	clientJSON, err := json.Marshal(formatedHistory)
 	if err != nil {
@@ -467,6 +484,7 @@ func (api *API) WatchCrypto(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Symbol string `json:"symbol"`
 	}
+
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
 		return
@@ -575,7 +593,7 @@ func (api *API) getCoinAndHistory(id string) (CoinDTO, []HistoryObject, error) {
 	return coin, history, nil
 }
 
-func (api *API) RefreshCrypto(w http.ResponseWriter, r *http.Request) {
+func (api *API) UpdateCrypto(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	symbol := chi.URLParam(r, "symbol")
@@ -588,6 +606,7 @@ func (api *API) RefreshCrypto(w http.ResponseWriter, r *http.Request) {
 
 	coin, history, err := api.getCoinAndHistory(id)
 	if coin.Symbol == "" && coin.Name == "" || err != nil {
+		api.GetHistory(w, r)
 		return
 	}
 
