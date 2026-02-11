@@ -423,7 +423,6 @@ func (api *API) GetStats(w http.ResponseWriter, r *http.Request) {
 	key := statsCachePrefix + id
 	cachedJSON, err := api.cache.Get(api.ctx, key).Result()
 	if cachedJSON != "" && err == nil {
-		log.Println("stats cached hitted")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(cachedJSON))
 		return
@@ -523,9 +522,6 @@ func (api *API) WatchCrypto(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	// the most important to save WatchAttributes
-	//api.attributes[id] = snap
-
 	clientJSON, err := json.Marshal(snap)
 	if err != nil {
 		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
@@ -602,21 +598,10 @@ func (api *API) getCoinAndHistory(id string) (CoinDTO, []HistoryObject, error) {
 	return coin, history, nil
 }
 
-func (api *API) UpdateCrypto(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-
-	symbol := chi.URLParam(r, "symbol")
-
-	id, err := api.getID(symbol)
-	if err != nil {
-		http.Error(w, errorfmt.Jsonize(err), http.StatusNotFound)
-		return
-	}
-
+func (api *API) updatePrice(id string, symbol string) ([]byte, error) {
 	coin, history, err := api.getCoinAndHistory(id)
 	if coin.Symbol == "" && coin.Name == "" || err != nil {
-		api.GetHistory(w, r)
-		return
+		return nil, err
 	}
 
 	snap := Snap{
@@ -631,13 +616,32 @@ func (api *API) UpdateCrypto(w http.ResponseWriter, r *http.Request) {
 
 	clientJSON, err := json.Marshal(snap)
 	if err != nil {
-		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
-		return
+		return nil, err
 	}
 
 	key := repoPrefix + id
 	if err := api.cache.Set(api.ctx, key, clientJSON, 15*time.Minute).Err(); err != nil {
-		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
+		return nil, err
+	}
+
+	return clientJSON, nil
+}
+
+func (api *API) UpdateCrypto(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	symbol := chi.URLParam(r, "symbol")
+
+	id, err := api.getID(symbol)
+	if err != nil {
+		http.Error(w, errorfmt.Jsonize(err), http.StatusNotFound)
+		return
+	}
+
+	// updatePrice function
+	clientJSON, err := api.updatePrice(id, symbol)
+	if err != nil {
+		api.GetHistory(w, r)
 		return
 	}
 
@@ -727,6 +731,8 @@ func (api *API) TriggerUpdate(w http.ResponseWriter, r *http.Request) {
 		UpdatedCount: int(api.schedule.updatedCount.Load()),
 		Timestamp:    time.Now().UTC().Round(time.Second),
 	}
+
+	go api.updatePrices()
 
 	clientJSON, err := json.Marshal(trigger)
 	if err != nil {
