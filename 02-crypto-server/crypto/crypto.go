@@ -598,7 +598,7 @@ func (api *API) getCoinAndHistory(id string) (CoinDTO, []HistoryObject, error) {
 	return coin, history, nil
 }
 
-func (api *API) updatePrice(id string, symbol string) ([]byte, error) {
+func (api *API) updatePrice(id string) ([]byte, error) {
 	coin, history, err := api.getCoinAndHistory(id)
 	if coin.Symbol == "" && coin.Name == "" || err != nil {
 		return nil, err
@@ -606,7 +606,7 @@ func (api *API) updatePrice(id string, symbol string) ([]byte, error) {
 
 	snap := Snap{
 		Crypto: WatchAttributes{
-			Symbol:       symbol,
+			Symbol:       coin.Symbol,
 			Name:         coin.Name,
 			CurrentPrice: coin.MarketData.CurrentPrice.Usd,
 			LastUpdated:  coin.LastUpdated,
@@ -639,7 +639,7 @@ func (api *API) UpdateCrypto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// updatePrice function
-	clientJSON, err := api.updatePrice(id, symbol)
+	clientJSON, err := api.updatePrice(id)
 	if err != nil {
 		api.GetHistory(w, r)
 		return
@@ -725,14 +725,13 @@ func (api *API) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *API) TriggerUpdate(w http.ResponseWriter, r *http.Request) {
-	api.schedule.updatedCount.Add(1)
+
+	api.updateAllPrices()
 
 	trigger := ScheduleTrigger{
 		UpdatedCount: int(api.schedule.updatedCount.Load()),
-		Timestamp:    time.Now().UTC().Round(time.Second),
+		Timestamp:    api.schedule.lastUpdate,
 	}
-
-	go api.updatePrices()
 
 	clientJSON, err := json.Marshal(trigger)
 	if err != nil {
@@ -744,6 +743,15 @@ func (api *API) TriggerUpdate(w http.ResponseWriter, r *http.Request) {
 	w.Write(clientJSON)
 }
 
-func (api *API) updatePrices() {
+func (api *API) updateAllPrices() {
+	const keysPerRequest = 10
+	iter := api.cache.Scan(api.ctx, 0, repoPrefix+"*", keysPerRequest).Iterator()
 
+	for iter.Next(api.ctx) {
+		id := iter.Val()
+		api.updatePrice(id)
+		api.schedule.updatedCount.Add(1)
+	}
+
+	api.schedule.lastUpdate = time.Now().UTC()
 }
