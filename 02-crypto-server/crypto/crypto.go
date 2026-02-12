@@ -51,7 +51,7 @@ type ScheduleTrigger struct {
 }
 
 type Schedule struct {
-	enabled         bool
+	enabled         atomic.Bool
 	intervalSeconds int
 	lastUpdate      time.Time
 	updatedCount    atomic.Int64
@@ -711,7 +711,7 @@ func (api *API) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	api.schedule.enabled = settings.Enabled
+	api.schedule.enabled.Store(settings.Enabled)
 	api.schedule.intervalSeconds = settings.IntervalSeconds
 
 	clientJSON, err := json.Marshal(settings)
@@ -754,4 +754,15 @@ func (api *API) updateAllPrices() {
 	}
 
 	api.schedule.lastUpdate = time.Now().UTC()
+}
+
+func (api *API) BackgroundUpdate() {
+	ticker := time.NewTicker(time.Duration(api.schedule.intervalSeconds) * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if api.schedule.enabled.Load() {
+			go api.updateAllPrices()
+		}
+	}
 }
