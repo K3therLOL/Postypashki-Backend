@@ -1,19 +1,22 @@
 package controller
 
 import (
-	"time"
-	"fmt"
-	"errors"
-	"net/http"
-	"encoding/json"
 	"cryptoserver/clean/usecase"
+	"cryptoserver/errorfmt"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
 var (
-	ErrInvalidJson  = errors.New("Invalid json.")
-	ErrInvalidDTO   = errors.New("Username and password required.")
+	ErrInvalidJson = errors.New("Invalid json.")
+	ErrInvalidDTO  = errors.New("Username and password required.")
 )
 
 type userDTO struct { // DATA TRANSFER OBJECT
@@ -43,42 +46,28 @@ func formateToken(token string) string {
 	return string(tokenJson)
 }
 
-type errorJson struct {
-	Err string `json:"error"`
-}
-
-func newErrorJson(err string) errorJson {
-	return errorJson{Err: err}
-}
-
-func formateError(err error) string {
-	errStruct := newErrorJson(err.Error())
-	errJson, _ := json.Marshal(errStruct)
-	return string(errJson)
-}
-
 func (controller *Auth) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	data := &userDTO{}
 	if err := json.NewDecoder(r.Body).Decode(data); err != nil {
-		http.Error(w, formateError(ErrInvalidJson), http.StatusBadRequest)
+		http.Error(w, errorfmt.Jsonize(ErrInvalidJson), http.StatusBadRequest)
 		return
 	}
 
 	if data.Username == "" || data.Password == "" {
-		http.Error(w, formateError(ErrInvalidDTO), http.StatusBadRequest)
+		http.Error(w, errorfmt.Jsonize(ErrInvalidDTO), http.StatusBadRequest)
 		return
 	}
-	
+
 	if err := controller.ua.Register(data.Username, data.Password); err != nil {
-		http.Error(w, formateError(err), http.StatusConflict)
+		http.Error(w, errorfmt.Jsonize(err), http.StatusConflict)
 		return
 	}
 
 	tokenString, err := createToken()
 	if err != nil {
-		http.Error(w, formateError(err), http.StatusBadRequest)
+		http.Error(w, errorfmt.Jsonize(err), http.StatusBadRequest)
 		return
 	}
 
@@ -91,24 +80,24 @@ func (controller *Auth) LoginUser(w http.ResponseWriter, r *http.Request) {
 
 	data := &userDTO{}
 	if err := json.NewDecoder(r.Body).Decode(data); err != nil {
-		http.Error(w, formateError(ErrInvalidJson), http.StatusBadRequest)
+		http.Error(w, errorfmt.Jsonize(ErrInvalidJson), http.StatusBadRequest)
 		return
 	}
 
 	if data.Username == "" || data.Password == "" {
-		http.Error(w, formateError(ErrInvalidDTO), http.StatusBadRequest)
+		http.Error(w, errorfmt.Jsonize(ErrInvalidDTO), http.StatusBadRequest)
 		return
 	}
 
 	err := controller.ua.Login(data.Username, data.Password)
 	if err != nil {
-		http.Error(w, formateError(err), http.StatusUnauthorized)
+		http.Error(w, errorfmt.Jsonize(err), http.StatusUnauthorized)
 		return
 	}
 
 	tokenString, err := createToken()
 	if err != nil {
-		http.Error(w, formateError(err), http.StatusUnauthorized)
+		http.Error(w, errorfmt.Jsonize(err), http.StatusUnauthorized)
 		return
 	}
 
@@ -124,6 +113,6 @@ func createToken() (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret := []byte("super_secret_key_that_should_be_long_and_random") // fix this, need security
+	secret := os.Getenv("JWT_SECRET")
 	return token.SignedString(secret)
 }

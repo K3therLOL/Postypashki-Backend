@@ -144,6 +144,9 @@ func NewAPI() *API {
 			Addr: "localhost:6379",
 		}),
 		recordsCount: 100,
+		schedule: Schedule{
+			intervalSeconds: 60,
+		},
 	}
 
 	_, err := api.cache.Ping(api.ctx).Result()
@@ -678,7 +681,7 @@ func (api *API) DeleteCrypto(w http.ResponseWriter, r *http.Request) {
 
 func (api *API) GetSchedule(w http.ResponseWriter, r *http.Request) {
 	schedule := ScheduleDTO{
-		Enabled:         api.schedule.enabled,
+		Enabled:         api.schedule.enabled.Load(),
 		IntervalSeconds: api.schedule.intervalSeconds,
 		LastUpdate:      api.schedule.lastUpdate.Round(time.Second),
 	}
@@ -761,8 +764,11 @@ func (api *API) BackgroundUpdate() {
 	defer ticker.Stop()
 
 	for range ticker.C {
+		log.Println("tick tack")
 		if api.schedule.enabled.Load() {
 			go api.updateAllPrices()
 		}
+
+		ticker.Reset(time.Duration(api.schedule.intervalSeconds) * time.Second)
 	}
 }
