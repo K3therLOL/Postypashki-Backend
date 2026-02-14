@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -37,7 +38,7 @@ func authMiddleware(next http.Handler) http.Handler {
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		secret := []byte("super_secret_key_that_should_be_long_and_random") // fix this, need security
+		secret := []byte(os.Getenv("JWT_SECRET"))
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 			if token.Method.Alg() != "HS256" { // alg: none attack -> defend
 				return nil, fmt.Errorf("algo %v, expected HS256\n", token.Header["alg"])
@@ -56,6 +57,8 @@ func authMiddleware(next http.Handler) http.Handler {
 
 func cryptoRoute(r chi.Router) {
 	api := crypto.NewAPI()
+	go api.BackgroundUpdate()
+
 	r.Route("/crypto", func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Get("/", api.ListCryptos)  // GET  /crypto
@@ -72,9 +75,9 @@ func cryptoRoute(r chi.Router) {
 
 	r.Route("/schedule", func(r chi.Router) {
 		r.Use(authMiddleware)
-		r.Get("/", api.GetSchedule)    // GET  /schedule
-		r.Put("/", api.UpdateSchedule) // PUT  /schedule
-		//r.Post("/trigger", api.TriggerUpdate) // POST /schedule/trigger
+		r.Get("/", api.GetSchedule)           // GET  /schedule
+		r.Put("/", api.UpdateSchedule)        // PUT  /schedule
+		r.Post("/trigger", api.TriggerUpdate) // POST /schedule/trigger
 	})
 }
 

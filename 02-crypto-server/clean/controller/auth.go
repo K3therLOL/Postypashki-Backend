@@ -113,6 +113,6 @@ func createToken() (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret := os.Getenv("JWT_SECRET")
+	secret := []byte(os.Getenv("JWT_SECRET"))
 	return token.SignedString(secret)
 }
