@@ -764,9 +764,8 @@ func (api *API) BackgroundUpdate() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		log.Println("tick tack")
 		if api.schedule.enabled.Load() {
-			go api.updateAllPrices()
+			api.updateAllPrices()
 		}
 
 		ticker.Reset(time.Duration(api.schedule.intervalSeconds) * time.Second)
