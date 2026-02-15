@@ -167,12 +167,6 @@ func (api *API) cacheCryptoID(crypto CryptoDTO) {
 	}
 }
 
-func (api *API) cacheCryptoIDSet(cryptos []CryptoDTO) {
-	for _, crypto := range cryptos {
-		api.cacheCryptoID(crypto)
-	}
-}
-
 func (api *API) getID(symbol string) (string, error) {
 	id, err := api.cache.Get(api.ctx, symbol).Result()
 	if err == nil {
