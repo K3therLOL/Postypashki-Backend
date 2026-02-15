@@ -52,7 +52,7 @@ type ScheduleTrigger struct {
 
 type Schedule struct {
 	enabled         atomic.Bool
-	intervalSeconds int
+	intervalSeconds atomic.Int64
 	lastUpdate      time.Time
 	updatedCount    atomic.Int64
 }
@@ -144,10 +144,9 @@ func NewAPI() *API {
 			Addr: "localhost:6379",
 		}),
 		recordsCount: 100,
-		schedule: Schedule{
-			intervalSeconds: 60,
-		},
+		schedule:     Schedule{},
 	}
+	api.schedule.intervalSeconds.Store(60)
 
 	_, err := api.cache.Ping(api.ctx).Result()
 	if err != nil {
@@ -158,13 +157,6 @@ func NewAPI() *API {
 	// api.cache.FlushDB(api.ctx)
 	log.Println("Successful connection to redis.")
 	return api
-}
-
-func (api *API) cacheCryptoID(crypto CryptoDTO) {
-	err := api.cache.SetNX(api.ctx, crypto.Symbol, crypto.Id, 30*time.Minute).Err()
-	if err != nil {
-		log.Println(err.Error())
-	}
 }
 
 func (api *API) getID(symbol string) (string, error) {
@@ -676,14 +668,14 @@ func (api *API) DeleteCrypto(w http.ResponseWriter, r *http.Request) {
 func (api *API) GetSchedule(w http.ResponseWriter, r *http.Request) {
 	schedule := ScheduleDTO{
 		Enabled:         api.schedule.enabled.Load(),
-		IntervalSeconds: api.schedule.intervalSeconds,
+		IntervalSeconds: int(api.schedule.intervalSeconds.Load()),
 		LastUpdate:      api.schedule.lastUpdate.Round(time.Second),
 	}
 
 	if api.schedule.lastUpdate.IsZero() {
 		schedule.NextUpdate = api.schedule.lastUpdate
 	} else {
-		schedule.NextUpdate = api.schedule.lastUpdate.Add(time.Duration(api.schedule.intervalSeconds) * time.Second).Round(time.Second)
+		schedule.NextUpdate = api.schedule.lastUpdate.Add(time.Duration(int(api.schedule.intervalSeconds.Load())) * time.Second).Round(time.Second)
 	}
 
 	clientJSON, err := json.Marshal(schedule)
@@ -709,7 +701,7 @@ func (api *API) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	api.schedule.enabled.Store(settings.Enabled)
-	api.schedule.intervalSeconds = settings.IntervalSeconds
+	api.schedule.intervalSeconds.Store(int64(settings.IntervalSeconds))
 
 	clientJSON, err := json.Marshal(settings)
 	if err != nil {
@@ -754,7 +746,7 @@ func (api *API) updateAllPrices() {
 }
 
 func (api *API) BackgroundUpdate() {
-	ticker := time.NewTicker(time.Duration(api.schedule.intervalSeconds) * time.Second)
+	ticker := time.NewTicker(time.Duration(api.schedule.intervalSeconds.Load()) * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -762,6 +754,6 @@ func (api *API) BackgroundUpdate() {
 			api.updateAllPrices()
 		}
 
-		ticker.Reset(time.Duration(api.schedule.intervalSeconds) * time.Second)
+		ticker.Reset(time.Duration(api.schedule.intervalSeconds.Load()) * time.Second)
 	}
 }
