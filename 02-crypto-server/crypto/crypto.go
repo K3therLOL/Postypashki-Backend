@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -65,6 +66,7 @@ type API struct {
 	cache        *redis.Client
 	recordsCount int
 	schedule     Schedule
+	logger       *log.Logger
 }
 
 type CryptoDTO struct {
@@ -145,17 +147,18 @@ func NewAPI() *API {
 		}),
 		recordsCount: 100,
 		schedule:     Schedule{},
+		logger:       log.New(os.Stdout, "server: ", log.Ldate|log.Ltime),
 	}
 	api.schedule.intervalSeconds.Store(60)
 
 	_, err := api.cache.Ping(api.ctx).Result()
 	if err != nil {
-		log.Println("Cannot connect to redis.", err)
+		api.logger.Println("Cannot connect to redis.", err)
 		return nil
 	}
 
 	// api.cache.FlushDB(api.ctx)
-	log.Println("Successful connection to redis.")
+	api.logger.Println("Successful connection to redis.")
 	return api
 }
 
