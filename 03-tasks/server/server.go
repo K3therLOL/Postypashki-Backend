@@ -14,5 +14,5 @@ func CreateAndRun() error {
 	r.GET("/status/:task_id", api.GetTaskStatus)
 	r.GET("/result/:task_id", api.GetTaskResult)
 
-	return r.Run()
+	return r.RunTLS(":8080", "cert.pem", "key.pem")
 }
