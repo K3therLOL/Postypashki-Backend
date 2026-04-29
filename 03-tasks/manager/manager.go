@@ -17,8 +17,10 @@ import (
 	repository "task/repository/rai"
 	"time"
 
+	"task/imaging"
+
 	fhttp "github.com/bogdanfinn/fhttp"
-	tls_client "github.com/bogdanfinn/tls-client"
+	tlsClient "github.com/bogdanfinn/tls-client"
 	"github.com/bogdanfinn/tls-client/profiles"
 
 	"github.com/gen2brain/avif"
@@ -99,15 +101,15 @@ func getDomainName(url string) string {
 
 func (api *API) downloadAndDecodeImg(url string) (image.Image, string, error) {
 	api.logger.Println(url)
-	jar := tls_client.NewCookieJar()
-	options := []tls_client.HttpClientOption{
-		tls_client.WithTimeoutSeconds(30),
-		tls_client.WithClientProfile(profiles.Chrome_144),
-		tls_client.WithNotFollowRedirects(),
-		tls_client.WithCookieJar(jar),
+	jar := tlsClient.NewCookieJar()
+	options := []tlsClient.HttpClientOption{
+		tlsClient.WithTimeoutSeconds(30),
+		tlsClient.WithClientProfile(profiles.Chrome_144),
+		tlsClient.WithNotFollowRedirects(),
+		tlsClient.WithCookieJar(jar),
 	}
 
-	client, err := tls_client.NewHttpClient(tls_client.NewNoopLogger(), options...)
+	client, err := tlsClient.NewHttpClient(tlsClient.NewNoopLogger(), options...)
 	if err != nil {
 		log.Println(err)
 		return nil, "", err
@@ -118,12 +120,12 @@ func (api *API) downloadAndDecodeImg(url string) (image.Image, string, error) {
 	}
 
 	api.logger.Println(getDomainName(url))
-	//req.Header.Set("Host", "cdn.plus.unsplash.com")
+	req.Header.Set("Host", fmt.Sprintf("cdn.%s", getDomainName(url)))
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:149.0) Gecko/20100101 Firefox/149.0")
 	req.Header.Set("Accept", "image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	req.Header.Set("Accept-Encoding", "gzip, deflate, br, zstd")
-	//req.Header.Set("Referer", "https://plus.unsplash.com/")
+	req.Header.Set("Referer", fmt.Sprintf("https://%s/", getDomainName(url)))
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -224,7 +226,14 @@ func (api *API) processTask(uuid uuid.UUID, url string) {
 		return // ? should i do change that
 	}
 
-	imgUrl, err := api.uploadImgForClient(img, format)
+	// check that
+	tensor := imaging.Img2tensor(img)
+	tensor = imaging.GaussianBlur(tensor)
+	tensor = imaging.GaussianBlur(tensor)
+	tensor = imaging.GaussianBlur(tensor)
+	newImg := imaging.Tensor2img(tensor)
+
+	imgUrl, err := api.uploadImgForClient(newImg, format)
 	if err != nil {
 		api.logger.Println("Hello:")
 		api.logger.Println(err)
