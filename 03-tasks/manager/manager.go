@@ -72,18 +72,9 @@ func confS3Client() *s3.Client {
 
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(endpoint)
-		o.UsePathStyle = true
+		o.UsePathStyle = false
 		//o.ClientLogMode = aws.LogSigning | aws.LogRetries | aws.LogRequestWithBody
 	})
-
-	result, err := client.ListBuckets(context.TODO(), &s3.ListBucketsInput{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, bucket := range result.Buckets {
-		log.Printf("* %s (created %s)\n", aws.ToString(bucket.Name), bucket.CreationDate)
-	}
 
 	return client
 }
@@ -209,11 +200,10 @@ func (api *API) uploadImgForClient(img image.Image, format string) (string, erro
 	key := fmt.Sprintf("image.%v", format)
 	bucket := os.Getenv("BUCKET")
 	_, err := transferClient.UploadObject(context.TODO(), &transfermanager.UploadObjectInput{
-		Bucket:            aws.String(bucket),
-		Key:               aws.String(key),
-		Body:              imageToReader(img, format),
-		ContentType:       aws.String(fmt.Sprintf("image/%v", format)),
-		ChecksumAlgorithm: "",
+		Bucket:      aws.String(bucket),
+		Key:         aws.String(key),
+		Body:        imageToReader(img, format),
+		ContentType: aws.String(fmt.Sprintf("image/%v", format)),
 	})
 	if err != nil {
 		return "", err
