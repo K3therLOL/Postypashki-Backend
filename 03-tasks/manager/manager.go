@@ -219,12 +219,12 @@ func (api *API) uploadImgForClient(img image.Image, format string) (string, erro
 		return "", err
 	}
 
-	//tempImgUrl, err := api.generateTemporaryUrl(bucket, *key)
-	//if err != nil {
-	api.logger.Println("Cannot generate temporary url, returning fixed.")
-	return generatePublicURL(bucket, key), nil
-	//}
-	//return tempImgUrl, nil
+	tempImgUrl, err := api.generateTemporaryUrl(bucket, key)
+	if err != nil {
+		api.logger.Println("Cannot generate temporary url, returning fixed.")
+		return generatePublicURL(bucket, key), nil
+	}
+	return tempImgUrl, nil
 }
 
 func (api *API) processTask(uuid uuid.UUID, url string) {
