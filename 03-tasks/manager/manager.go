@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/gif"
 	"image/jpeg"
 	"image/png"
@@ -32,6 +33,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/redis/go-redis/v9"
 )
 
 type API struct {
@@ -39,6 +41,7 @@ type API struct {
 	client   *http.Client
 	logger   *log.Logger
 	s3Client *s3.Client
+	cache    *redis.Client
 }
 
 type imgUrl struct {
@@ -46,14 +49,15 @@ type imgUrl struct {
 }
 
 var (
-	ErrWrongTaskID  = errors.New("Invalid task_id.")
-	ErrStatusAccess = errors.New("Could not get status.")
-	ErrSaveTaskID   = errors.New("Could not save task_id.")
-	ErrNoConnection = errors.New("Check connection to internet.")
-	ErrWithResp     = errors.New("Response ended with error.")
-	ErrNotImage     = errors.New("No image returned from response.")
-	ErrImgProc      = errors.New("Image processing failed.")
-	ErrReqCreation  = errors.New("Could not create a request handler.")
+	ErrWrongTaskID      = errors.New("Invalid task_id.")
+	ErrStatusAccess     = errors.New("Could not get status.")
+	ErrSaveTaskID       = errors.New("Could not save task_id.")
+	ErrNoConnection     = errors.New("Check connection to internet.")
+	ErrWithResp         = errors.New("Response ended with error.")
+	ErrNotImage         = errors.New("No image returned from response.")
+	ErrImgProc          = errors.New("Image processing failed.")
+	ErrReqCreation      = errors.New("Could not create a request handler.")
+	ErrTaskNotCompleted = errors.New("Task not completed yet.")
 )
 
 func confS3Client() *s3.Client {
@@ -89,6 +93,9 @@ func NewAPI() *API {
 		},
 		logger:   log.New(os.Stdout, "api: ", log.Ldate|log.Ltime),
 		s3Client: confS3Client(),
+		cache: redis.NewClient(&redis.Options{
+			Addr: "localhost:6379",
+		}),
 	}
 	return api
 }
@@ -145,10 +152,10 @@ func (api *API) downloadAndDecodeImg(url string) (image.Image, string, error) {
 	api.logger.Println(contentType)
 
 	img, format, err := image.Decode(resp.Body)
-	api.logger.Printf("Image format: %v\n", format)
+	api.logger.Printf("Image format: %s\n", format)
 
 	if err != nil {
-		return nil, "", fmt.Errorf("Cannot decode image with %v format.", format)
+		return nil, "", fmt.Errorf("Cannot decode image with %s format.", format)
 	}
 
 	api.logger.Println("Image successfully decoded")
@@ -199,13 +206,13 @@ func (api *API) generateTemporaryUrl(bucket, key string) (string, error) {
 func (api *API) uploadImgForClient(img image.Image, format string) (string, error) {
 	transferClient := transfermanager.New(api.s3Client)
 
-	key := fmt.Sprintf("image.%v", format)
+	key := fmt.Sprintf("image.%s", format)
 	bucket := os.Getenv("BUCKET")
 	_, err := transferClient.UploadObject(context.TODO(), &transfermanager.UploadObjectInput{
 		Bucket:      aws.String(bucket),
 		Key:         aws.String(key),
 		Body:        imageToReader(img, format),
-		ContentType: aws.String(fmt.Sprintf("image/%v", format)),
+		ContentType: aws.String(fmt.Sprintf("image/%s", format)),
 	})
 	if err != nil {
 		return "", err
@@ -219,6 +226,21 @@ func (api *API) uploadImgForClient(img image.Image, format string) (string, erro
 	return tempImgUrl, nil
 }
 
+func processImage(img image.Image) image.Image {
+	tensor := imaging.Img2tensor(img)
+	operations := []func([][]color.Color) [][]color.Color{
+		imaging.GaussianBlur,
+		imaging.GaussianBlur,
+	}
+
+	for _, operation := range operations {
+		tensor = operation(tensor)
+	}
+
+	return imaging.Tensor2img(tensor)
+
+}
+
 func (api *API) processTask(uuid uuid.UUID, url string) {
 	img, format, err := api.downloadAndDecodeImg(url)
 	if err != nil {
@@ -226,22 +248,21 @@ func (api *API) processTask(uuid uuid.UUID, url string) {
 		return // ? should i do change that
 	}
 
-	// check that
-	tensor := imaging.Img2tensor(img)
-	tensor = imaging.GaussianBlur(tensor)
-	tensor = imaging.GaussianBlur(tensor)
-	tensor = imaging.GaussianBlur(tensor)
-	newImg := imaging.Tensor2img(tensor)
+	newImg := processImage(img)
 
 	imgUrl, err := api.uploadImgForClient(newImg, format)
 	if err != nil {
-		api.logger.Println("Hello:")
 		api.logger.Println(err)
-		return // ? should i do change that
+		return
 	}
 
-	api.logger.Printf("Image uploaded to %v\n.", imgUrl)
+	api.logger.Printf("Image uploaded to %s\n.", imgUrl)
 
+	if err := api.cache.Set(context.TODO(), uuid.String(), imgUrl, time.Duration(24*time.Hour)).Err(); err != nil {
+		api.logger.Println(err)
+		return
+	}
+	api.logger.Println(uuid.String())
 	api.repo.Update(uuid)
 }
 
@@ -266,7 +287,7 @@ func (api *API) ExecuteTask(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusCreated, gin.H{
 		"task_id": taskID.String(),
 	})
 }
@@ -280,6 +301,7 @@ func (api *API) GetTaskStatus(c *gin.Context) {
 		})
 		return
 	}
+
 	taskobj, err := api.repo.Get(uuid)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -296,8 +318,16 @@ func (api *API) GetTaskStatus(c *gin.Context) {
 /* TO DO */
 func (api *API) GetTaskResult(c *gin.Context) {
 	taskID := c.Param("task_id")
+
+	imgUrl, err := api.cache.Get(context.TODO(), taskID).Result()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": ErrTaskNotCompleted.Error(),
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"result":  "soon here will be result",
-		"task_id": taskID,
+		"image_url": imgUrl,
 	})
 }
