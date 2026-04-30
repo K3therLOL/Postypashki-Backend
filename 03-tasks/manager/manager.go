@@ -296,7 +296,7 @@ func (api *API) GetTaskStatus(c *gin.Context) {
 	taskID := c.Param("task_id")
 	uuid, err := uuid.Parse(taskID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(http.StatusNotFound, gin.H{
 			"error": ErrWrongTaskID.Error(),
 		})
 		return
@@ -304,7 +304,7 @@ func (api *API) GetTaskStatus(c *gin.Context) {
 
 	taskobj, err := api.repo.Get(uuid)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(http.StatusNotFound, gin.H{
 			"error": ErrStatusAccess.Error(),
 		})
 		return
@@ -321,7 +321,7 @@ func (api *API) GetTaskResult(c *gin.Context) {
 
 	imgUrl, err := api.cache.Get(context.TODO(), taskID).Result()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(http.StatusNotFound, gin.H{
 			"error": ErrTaskNotCompleted.Error(),
 		})
 		return
