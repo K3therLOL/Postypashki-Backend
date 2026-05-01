@@ -14,3 +14,8 @@ type TaskRepository interface {
 	Update(uuid uuid.UUID) error
 	Get(uuid uuid.UUID) (*TaskObject, error)
 }
+
+type ResultRepository interface {
+	Get(key string) (string, error)
+	Set(key, value string) error
+}
