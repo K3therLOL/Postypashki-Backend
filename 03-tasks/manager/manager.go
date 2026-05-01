@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"image/color"
 	"image/gif"
 	"image/jpeg"
 	"image/png"
@@ -222,21 +221,6 @@ func (api *API) uploadImgForClient(img image.Image, format string) (string, erro
 	return tempImgUrl, nil
 }
 
-func processImage(img image.Image) image.Image {
-	tensor := imaging.Img2tensor(img)
-	operations := []func([][]color.Color) [][]color.Color{
-		imaging.GaussianBlur,
-		imaging.GaussianBlur,
-	}
-
-	for _, operation := range operations {
-		tensor = operation(tensor)
-	}
-
-	return imaging.Tensor2img(tensor)
-
-}
-
 func (api *API) processTask(uuid uuid.UUID, url string) {
 	img, format, err := api.downloadAndDecodeImg(url)
 	if err != nil {
@@ -244,7 +228,7 @@ func (api *API) processTask(uuid uuid.UUID, url string) {
 		return // ? should i do change that
 	}
 
-	newImg := processImage(img)
+	newImg := imaging.ProcessImage(img)
 
 	imgUrl, err := api.uploadImgForClient(newImg, format)
 	if err != nil {

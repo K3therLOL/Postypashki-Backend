@@ -21,6 +21,20 @@ func Img2tensor(img image.Image) [][]color.Color {
 	return tensor
 }
 
+func ProcessImage(img image.Image) image.Image {
+	tensor := Img2tensor(img)
+	operations := []func([][]color.Color) [][]color.Color{
+		GaussianBlur,
+		GaussianBlur,
+	}
+
+	for _, operation := range operations {
+		tensor = operation(tensor)
+	}
+
+	return Tensor2img(tensor)
+}
+
 func clamp(v float64) float64 {
 	if v < 0 {
 		return 0
