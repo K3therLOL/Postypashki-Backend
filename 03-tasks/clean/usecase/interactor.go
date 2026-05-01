@@ -31,6 +31,10 @@ func (interactor *TaskInteractor) GetTaskStatus(taskID uuid.UUID) (string, error
 	return taskobj.Status, nil
 }
 
+func (interactor *TaskInteractor) UpdateTaskStatus(taskID uuid.UUID) error {
+	return interactor.taskRepo.Update(taskID)
+}
+
 func (interactor *TaskInteractor) SaveResult(taskID, result string) error {
 	return interactor.resRepo.Set(taskID, result)
 }
