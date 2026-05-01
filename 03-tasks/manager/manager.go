@@ -15,10 +15,11 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	repository "task/repository/rai"
 	"time"
 
-	"task/imaging"
+	"taskserver/clean/composure"
+	"taskserver/clean/usecase"
+	"taskserver/imaging"
 
 	fhttp "github.com/bogdanfinn/fhttp"
 	tlsClient "github.com/bogdanfinn/tls-client"
@@ -33,15 +34,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/redis/go-redis/v9"
 )
 
 type API struct {
-	repo     *repository.Repository
-	client   *http.Client
-	logger   *log.Logger
-	s3Client *s3.Client
-	cache    *redis.Client
+	client     *http.Client
+	logger     *log.Logger
+	s3Client   *s3.Client
+	interactor *usecase.TaskInteractor
 }
 
 type imgUrl struct {
@@ -87,15 +86,12 @@ func confS3Client() *s3.Client {
 
 func NewAPI() *API {
 	api := &API{
-		repo: repository.NewRepository(),
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		logger:   log.New(os.Stdout, "api: ", log.Ldate|log.Ltime),
-		s3Client: confS3Client(),
-		cache: redis.NewClient(&redis.Options{
-			Addr: "localhost:6379",
-		}),
+		logger:     log.New(os.Stdout, "api: ", log.Ldate|log.Ltime),
+		s3Client:   confS3Client(),
+		interactor: composure.NewTaskInteractor(),
 	}
 	return api
 }
@@ -258,12 +254,12 @@ func (api *API) processTask(uuid uuid.UUID, url string) {
 
 	api.logger.Printf("Image uploaded to %s\n.", imgUrl)
 
-	if err := api.cache.Set(context.TODO(), uuid.String(), imgUrl, time.Duration(24*time.Hour)).Err(); err != nil {
+	if err := api.interactor.SaveResult(uuid.String(), imgUrl); err != nil {
 		api.logger.Println(err)
 		return
 	}
 	api.logger.Println(uuid.String())
-	api.repo.Update(uuid)
+	api.interactor.UpdateTaskStatus(uuid)
 }
 
 // Image processing
@@ -280,7 +276,7 @@ func (api *API) ExecuteTask(c *gin.Context) {
 
 	go api.processTask(taskID, req.Url)
 
-	if err := api.repo.Save(taskID); err != nil {
+	if err := api.interactor.SaveTask(taskID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": taskID.String(),
 		})
@@ -302,7 +298,7 @@ func (api *API) GetTaskStatus(c *gin.Context) {
 		return
 	}
 
-	taskobj, err := api.repo.Get(uuid)
+	status, err := api.interactor.GetTaskStatus(uuid)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": ErrStatusAccess.Error(),
@@ -311,15 +307,14 @@ func (api *API) GetTaskStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status": taskobj.Status,
+		"status": status,
 	})
 }
 
-/* TO DO */
 func (api *API) GetTaskResult(c *gin.Context) {
 	taskID := c.Param("task_id")
 
-	imgUrl, err := api.cache.Get(context.TODO(), taskID).Result()
+	imgUrl, err := api.interactor.GetResult(taskID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": ErrTaskNotCompleted.Error(),

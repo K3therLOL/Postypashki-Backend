@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"task/server"
+	"taskserver/server"
 )
 
 func main() {
