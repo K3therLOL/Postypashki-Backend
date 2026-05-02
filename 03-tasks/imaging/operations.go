@@ -24,8 +24,8 @@ func Img2tensor(img image.Image) [][]color.Color {
 func ProcessImage(img image.Image) image.Image {
 	tensor := Img2tensor(img)
 	operations := []func([][]color.Color) [][]color.Color{
-		GaussianBlur,
-		GaussianBlur,
+		grayscale,
+		gaussianBlur,
 	}
 
 	for _, operation := range operations {
@@ -45,12 +45,44 @@ func clamp(v float64) float64 {
 	return v
 }
 
+func grayscale(tensor [][]color.Color) [][]color.Color {
+	width := len(tensor)
+	height := len(tensor[0])
+	newTensor := make([][]color.Color, width)
+	for i := range newTensor {
+		newTensor[i] = make([]color.Color, height)
+	}
+	for x := range width {
+		for y := range height {
+			pixel := tensor[x][y]
+			if pixel == nil {
+				continue
+			}
+			r, g, b, a := tensor[x][y].RGBA()
+
+			rf := float64(r >> 8)
+			gf := float64(g >> 8)
+			bf := float64(b >> 8)
+			gray := uint8(rf*0.21 + gf*0.72 + bf*0.07)
+			newPixel := color.RGBA{
+				gray,
+				gray,
+				gray,
+				uint8(a >> 8),
+			}
+			newTensor[x][y] = newPixel
+		}
+	}
+
+	return newTensor
+}
+
 func spatialFilter(tensor [][]color.Color, kernel mat.Dense) [][]color.Color {
 	width := len(tensor)
 	height := len(tensor[0])
-	newImage := make([][]color.Color, width)
-	for i := range newImage {
-		newImage[i] = make([]color.Color, height)
+	newTensor := make([][]color.Color, width)
+	for i := range newTensor {
+		newTensor[i] = make([]color.Color, height)
 	}
 
 	kRows, kCols := kernel.Dims()
@@ -65,11 +97,11 @@ func spatialFilter(tensor [][]color.Color, kernel mat.Dense) [][]color.Color {
 					ix := x + ka - offsetH
 					iy := y + kb - offsetW
 
-					// Получаем цвет (RGBA() возвращает 0-65535)
 					if tensor[ix][iy] == nil {
 						continue
 					}
 
+					// Получаем цвет (RGBA() возвращает 0-65535)
 					r, g, b, a := tensor[ix][iy].RGBA()
 					weight := kernel.At(ka, kb)
 
@@ -82,7 +114,7 @@ func spatialFilter(tensor [][]color.Color, kernel mat.Dense) [][]color.Color {
 			}
 
 			// clamping values
-			newImage[x][y] = color.RGBA{
+			newTensor[x][y] = color.RGBA{
 				R: uint8(clamp(rSum)),
 				G: uint8(clamp(gSum)),
 				B: uint8(clamp(bSum)),
@@ -90,10 +122,10 @@ func spatialFilter(tensor [][]color.Color, kernel mat.Dense) [][]color.Color {
 			}
 		}
 	}
-	return newImage
+	return newTensor
 }
 
-func GaussianBlur(tensor [][]color.Color) [][]color.Color {
+func gaussianBlur(tensor [][]color.Color) [][]color.Color {
 	gonum.Version()
 	gaussianKernel := mat.NewDense(5, 5, []float64{
 		1.0 / 256, 4.0 / 256, 6.0 / 256, 4.0 / 256, 1.0 / 256,
