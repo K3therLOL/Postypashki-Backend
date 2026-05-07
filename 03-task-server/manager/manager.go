@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"taskserver/clean/composure"
-	"taskserver/clean/usecase"
+	usecase "taskserver/clean/usecase/task"
 	"taskserver/imaging"
 
 	fhttp "github.com/bogdanfinn/fhttp"
