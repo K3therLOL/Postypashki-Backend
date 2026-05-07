@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 type User struct {
 	ID           int
 	Username     string
@@ -12,28 +14,27 @@ func NewUser(username, passwordHash string) *User {
 
 type UserRepository interface {
 	Save(user *User) error
-	Exist(username string) *User
+	Exist(username string) (*User, bool)
 }
 
 type Session struct {
-	userID    int
-	sessionID string
-}
-
-func NewSession() *Session {
-	return &Session{}
+	ID        int
+	UserID    int
+	Token     string
+	ExpiresAT time.Time
 }
 
 type SessionProvider interface {
 	Create() (*Session, error)
-	Get(sid string) (*Session, error)
+	Get(uid int) (*Session, error)
+	Update(session *Session) error
 	Delete(sid string) error
 	Refresh() error
 }
 
 type SessionRepository interface {
 	Save(session *Session) error
-	Exist(sid string) *Session
+	Exist(sid string) (*Session, bool)
 }
 
 type Hasher interface {
