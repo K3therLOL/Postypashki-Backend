@@ -41,24 +41,56 @@ func generateRandomId() int32 {
 	return int32(id % uint64(math.MaxInt32))
 }
 
+func (sessionRepo *SessionRepository) Delete(session *domain.Session) error {
+	query := `DELETE FROM sessions WHERE session_id = $1;`
+	_, err := sessionRepo.db.Exec(query, session.ID)
+
+	if err == nil {
+		sessionRepo.logger.Printf("Session (user_id -- %d, token -- %s, expires_at -- %T) deleted from db.\n",
+			session.UserID,
+			session.Token,
+			session.ExpiresAT)
+	}
+
+	return err
+}
+
 func (sessionRepo *SessionRepository) Save(session *domain.Session) error {
 	query := `INSERT INTO sessions (session_id, user_id, token, expires_at) VALUES ($1, $2, $3, $4);`
 	id := generateRandomId()
 	_, err := sessionRepo.db.Exec(query, id, session.UserID, session.Token, session.ExpiresAT)
 
-	sessionRepo.logger.Printf("Session (user_id -- %d, token -- %s, expires_at -- %T) added to db.\n",
-		session.UserID,
-		session.Token,
-		session.ExpiresAT)
+	if err == nil {
+		sessionRepo.logger.Printf("Session (user_id -- %d, token -- %s, expires_at -- %T) added to db.\n",
+			session.UserID,
+			session.Token,
+			session.ExpiresAT)
+	}
 
 	return err
 }
 
-func (sessionRepo *SessionRepository) Exist(token string) (*domain.Session, bool) {
+func (sessionRepo *SessionRepository) GetByToken(token string) (*domain.Session, bool) {
 	query := `SELECT session_id, user_id, token, expires_at FROM sessions WHERE token = $1;`
 
 	session := &domain.Session{}
 	if err := sessionRepo.db.QueryRow(query, token).Scan(&session.ID, &session.UserID, &session.Token, &session.ExpiresAT); err != nil {
+		return nil, false
+	}
+
+	sessionRepo.logger.Printf("Session (user_id -- %d, token -- %s, expires_at -- %T) fetched from db.\n",
+		session.UserID,
+		session.Token,
+		session.ExpiresAT)
+
+	return session, true
+}
+
+func (sessionRepo *SessionRepository) GetByUserID(userID int) (*domain.Session, bool) {
+	query := `SELECT session_id, user_id, token, expires_at FROM sessions WHERE user_id = $1;`
+
+	session := &domain.Session{}
+	if err := sessionRepo.db.QueryRow(query, userID).Scan(&session.ID, &session.UserID, &session.Token, &session.ExpiresAT); err != nil {
 		return nil, false
 	}
 

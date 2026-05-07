@@ -45,9 +45,11 @@ func (userRepo *UserRepository) Save(user *domain.User) error {
 	query := `INSERT INTO users (user_id, username, password_hash) VALUES ($1, $2, $3);`
 	_, err := userRepo.db.Exec(query, user.ID, user.Username, user.PasswordHash)
 
-	userRepo.logger.Printf("User (user_id -- %d, username -- %s) added to db.\n",
-		user.ID,
-		user.Username)
+	if err == nil {
+		userRepo.logger.Printf("User (user_id -- %d, username -- %s) added to db.\n",
+			user.ID,
+			user.Username)
+	}
 
 	return err
 }
