@@ -49,11 +49,24 @@ func (handler *AuthHandler) Register(username, password string) error {
 	if err := handler.sessionRepo.Save(sessionObj); err != nil {
 		return ErrWithSessionSaving
 	}
-
 	// UserID in own repo should be equal UserID in session
 	userObj.ID = sessionObj.UserID
 	if err := handler.userRepo.Save(userObj); err != nil {
 		return ErrWithUserSave
+	}
+
+	return nil
+}
+
+func (handler *AuthHandler) updateSession(session *domain.Session) error {
+	if err := handler.sessionRepo.Delete(session); err != nil {
+		return err
+	}
+
+	newSession := handler.sessionProvider.Create()
+	newSession.UserID = session.UserID
+	if err := handler.sessionRepo.Save(newSession); err != nil {
+		return err
 	}
 
 	return nil
@@ -73,9 +86,9 @@ func (handler *AuthHandler) Login(username, password string) error {
 		return ErrWrongPassword
 	}
 
-	sessionObj, err := handler.sessionProvider.Get(userObj.ID)
-	if err == nil {
-		handler.sessionProvider.Update(sessionObj)
+	sessionObj, ok := handler.sessionRepo.GetByUserID(userObj.ID)
+	if !ok {
+		handler.updateSession(sessionObj)
 	}
 	return nil
 }
