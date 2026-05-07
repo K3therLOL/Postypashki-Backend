@@ -6,4 +6,6 @@ cert:
 	go run $$(go env GOROOT)/src/crypto/tls/generate_cert.go --host localhost
 
 run:
-	set -a; source .env; set +a; go run main.go
+	set -a; source .env; set +a; 
+	sql-migrate up
+	go run main.go
