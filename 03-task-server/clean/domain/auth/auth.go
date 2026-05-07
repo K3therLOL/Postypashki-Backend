@@ -25,16 +25,15 @@ type Session struct {
 }
 
 type SessionProvider interface {
-	Create() (*Session, error)
-	Get(uid int) (*Session, error)
-	Update(session *Session) error
-	Delete(sid string) error
+	Create() *Session
 	Refresh() error
 }
 
 type SessionRepository interface {
 	Save(session *Session) error
-	Exist(sid string) (*Session, bool)
+	Delete(session *Session) error
+	GetByUserID(userID int) (*Session, bool)
+	GetByToken(token string) (*Session, bool)
 }
 
 type Hasher interface {
