@@ -21,11 +21,11 @@ type Session struct {
 	ID        int
 	UserID    int
 	Token     string
-	ExpiresAT time.Time
+	ExpiresAt time.Time
 }
 
 type SessionProvider interface {
-	Create() *Session
+	Create() (*Session, error)
 	Refresh() error
 }
 
