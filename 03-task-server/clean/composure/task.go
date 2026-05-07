@@ -1,7 +1,7 @@
 package composure
 
 import (
-	"taskserver/clean/usecase"
+	usecase "taskserver/clean/usecase/task"
 	resRepository "taskserver/repository/result/redis"
 	taskRepository "taskserver/repository/task/rai"
 )
