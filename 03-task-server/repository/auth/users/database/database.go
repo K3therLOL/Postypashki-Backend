@@ -8,6 +8,8 @@ import (
 	"math"
 	"os"
 	domain "taskserver/clean/domain/auth"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type UserRepository struct {
@@ -17,7 +19,7 @@ type UserRepository struct {
 
 func NewUserRepository(connString string) *UserRepository {
 	userRepo := new(UserRepository)
-	userRepo.logger = log.New(os.Stdout, "postgres: ", log.Ldate|log.Ltime)
+	userRepo.logger = log.New(os.Stdout, "user postgres: ", log.Ldate|log.Ltime)
 
 	db, err := sql.Open("pgx", connString)
 	if err != nil {
@@ -55,10 +57,10 @@ func (userRepo *UserRepository) Save(user *domain.User) error {
 }
 
 func (userRepo *UserRepository) Exist(username string) (*domain.User, bool) {
-	query := `SELECT user_id, user_id, token, expires_at FROM users WHERE username = $1;`
+	query := `SELECT user_id, username, password_hash FROM users WHERE username = $1;`
 
 	user := &domain.User{}
-	if err := userRepo.db.QueryRow(query, username).Scan(&user.ID, &user.ID, &user.Username, &user.PasswordHash); err != nil {
+	if err := userRepo.db.QueryRow(query, username).Scan(&user.ID, &user.Username, &user.PasswordHash); err != nil {
 		return nil, false
 	}
 

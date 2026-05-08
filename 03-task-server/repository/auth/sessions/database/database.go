@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	domain "taskserver/clean/domain/auth"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type SessionRepository struct {
@@ -14,7 +16,7 @@ type SessionRepository struct {
 
 func NewSessionRepository(connString string) *SessionRepository {
 	sessionRepo := new(SessionRepository)
-	sessionRepo.logger = log.New(os.Stdout, "postgres: ", log.Ldate|log.Ltime)
+	sessionRepo.logger = log.New(os.Stdout, "session postgres: ", log.Ldate|log.Ltime)
 
 	db, err := sql.Open("pgx", connString)
 	if err != nil {
@@ -48,6 +50,8 @@ func (sessionRepo *SessionRepository) Delete(session *domain.Session) error {
 func (sessionRepo *SessionRepository) Save(session *domain.Session) error {
 	query := `INSERT INTO sessions (session_id, user_id, token, expires_at) VALUES ($1, $2, $3, $4);`
 	_, err := sessionRepo.db.Exec(query, session.ID, session.UserID, session.Token, session.ExpiresAt)
+
+	sessionRepo.logger.Println(err)
 
 	if err == nil {
 		sessionRepo.logger.Printf("Session (user_id -- %d, token -- %s, expires_at -- %T) added to db.\n",
