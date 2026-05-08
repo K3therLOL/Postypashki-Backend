@@ -307,6 +307,6 @@ func (api *API) GetTaskResult(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"image_url": imgUrl,
+		"result": imgUrl,
 	})
 }
