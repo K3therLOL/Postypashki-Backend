@@ -1,6 +1,7 @@
 package server
 
 import (
+	"taskserver/clean/composure"
 	"taskserver/manager"
 
 	"github.com/gin-gonic/gin"
@@ -9,11 +10,17 @@ import (
 func CreateAndRun() error {
 	r := gin.Default()
 
-	api := manager.NewAPI()
+	auth := composure.NewAuthController()
+	r.POST("/register", auth.Register)
+	r.POST("/login", auth.Login)
 
-	r.POST("/task", api.ExecuteTask)
-	r.GET("/status/:task_id", api.GetTaskStatus)
-	r.GET("/result/:task_id", api.GetTaskResult)
+	api := manager.NewAPI()
+	authorized := r.Group("/")
+	authorized.Use(auth.Middleware())
+
+	authorized.POST("/task", api.ExecuteTask)
+	authorized.GET("/status/:task_id", api.GetTaskStatus)
+	authorized.GET("/result/:task_id", api.GetTaskResult)
 
 	return r.RunTLS(":8080", "cert.pem", "key.pem")
 }
