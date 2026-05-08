@@ -87,7 +87,7 @@ func (sessionRepo *SessionRepository) GetByUserID(userID int) (*domain.Session, 
 		return nil, false
 	}
 
-	sessionRepo.logger.Printf("Session (user_id -- %d, token -- %s, expires_at -- %T) fetched from db.\n",
+	sessionRepo.logger.Printf("Session (user_id -- %d, token -- %s, expires_at -- %v) fetched from db.\n",
 		session.UserID,
 		session.Token,
 		session.ExpiresAt)
