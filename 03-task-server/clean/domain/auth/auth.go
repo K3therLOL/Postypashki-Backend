@@ -26,7 +26,7 @@ type Session struct {
 
 type SessionProvider interface {
 	Create() (*Session, error)
-	Refresh() error
+	//Refresh() error
 }
 
 type SessionRepository interface {
