@@ -2,6 +2,7 @@ package composure
 
 import (
 	"os"
+	controller "taskserver/clean/controller/auth"
 	usecase "taskserver/clean/usecase/auth"
 	hasher "taskserver/hash"
 	provider "taskserver/provider/session"
@@ -9,12 +10,13 @@ import (
 	user "taskserver/repository/auth/users/database"
 )
 
-func NewAuthHandler() *usecase.AuthHandler {
+func NewAuthController() *controller.AuthController {
 	connString := os.Getenv("DB_CONN_STRING")
 
 	userRepo := user.NewUserRepository(connString)
 	sessionRepo := session.NewSessionRepository(connString)
 	sessionProvider := provider.NewSessionProvider(24)
 	hasher := hasher.NewHasher(10)
-	return usecase.NewAuthHandler(userRepo, sessionProvider, sessionRepo, hasher)
+	usecase := usecase.NewAuthHandler(userRepo, sessionProvider, sessionRepo, hasher)
+	return controller.NewAuthController(usecase)
 }
