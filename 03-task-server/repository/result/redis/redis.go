@@ -2,6 +2,9 @@ package repository
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -14,12 +17,23 @@ type ResultRepository struct {
 }
 
 func NewResultRepository(storageTime int) *ResultRepository {
+	host := os.Getenv("REDIS_HOST")
+	addr := fmt.Sprintf("%s:6379", host)
+	ctx := context.Background()
+	cache := redis.NewClient(&redis.Options{
+		Addr: addr,
+		DB:   0,
+	})
+
+	_, err := cache.Ping(ctx).Result()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	return &ResultRepository{
 		storageTime: time.Duration(storageTime) * time.Hour,
-		ctx:         context.TODO(),
-		cache: redis.NewClient(&redis.Options{
-			Addr: "localhost:6379",
-		}),
+		ctx:         ctx,
+		cache:       cache,
 	}
 }
 
