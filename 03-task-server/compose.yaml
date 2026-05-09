@@ -13,11 +13,34 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_CONN_STRING=${DB_CONN_STRING}
+      - REDIS_HOST=${REDIS_HOST}
     depends_on:
       redis:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    command: [
+      "./main"
+    ]
+    restart: "no"
+
+  migration:
+    build: .
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: [
+      "sql-migrate",
+      "up",
+      "-config=dbconfig.yml",
+      "-env=development"
+    ]
+    restart: "no"
 
   redis:
     image: redis:alpine
@@ -34,6 +57,8 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_USER: ${DB_USER}
+    #ports:
+    #  - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
