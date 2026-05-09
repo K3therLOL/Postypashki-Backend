@@ -12,3 +12,5 @@ RUN go install github.com/rubenv/sql-migrate/...@latest
 COPY --from=builder /build/migrations ./migrations
 COPY --from=builder /build/dbconfig.yml .
 COPY --from=builder /build/main .
+RUN apk add --no-cache python3
+CMD [ "python3", "-m", "http.server" ]
