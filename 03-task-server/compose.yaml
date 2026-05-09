@@ -1,0 +1,40 @@
+services:
+  web:
+    build: .
+    ports:
+      - "${SERVER_PORT}:${CONTAINER_PORT}"
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - ACCESS_KEY=${ACCESS_KEY}
+      - BUCKET=${BUCKET}
+      - ENDPOINT=${ENDPOINT}
+      - REGION=${REGION}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_CONN_STRING=${DB_CONN_STRING}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  redis:
+    image: redis:alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+      
+  postgres:
+    image: postgres:alpine
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
