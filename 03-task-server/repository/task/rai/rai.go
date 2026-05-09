@@ -41,6 +41,7 @@ func (r *TaskRepository) Update(uuid uuid.UUID) error {
 	}
 
 	taskobj.Status = Ready
+	r.repo[uuid] = taskobj
 	return nil
 }
 
