@@ -11,16 +11,10 @@ docker_run:
 	docker run --env-file .env.resolved -it $(IMAGE) /bin/sh
 	rm .env.resolved
 
+.PHONY: clean
 .ONESHELL:
 run:
 	docker compose up
-	#set -a; source .env; set +a; 
-	#sql-migrate up
-	#go run main.go
 
 clean:
 	docker compose down -v
-
-down:
-	set -a; source .env; set +a; 
-	sql-migrate down
