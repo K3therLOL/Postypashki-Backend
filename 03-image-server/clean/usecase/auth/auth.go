@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	domain "taskserver/clean/domain/auth"
+	"time"
 )
 
 var (
@@ -99,12 +100,16 @@ func (handler *AuthHandler) Login(username, password string) (string, error) {
 	return sessionObj.Token, nil
 }
 
-func (handler *AuthHandler) GetSession(token string) (string, error) {
+func (handler *AuthHandler) GetSession(token string) (*domain.Session, error) {
 	sessionObj, ok := handler.sessionRepo.GetByToken(token)
 	if !ok {
-		return "", ErrAuthFirst
+		return nil, ErrAuthFirst
 	}
 
 	log.Printf("User %d has %s token that expires %v\n", sessionObj.UserID, sessionObj.Token, sessionObj.ExpiresAt)
-	return sessionObj.Token, nil
+	return sessionObj, nil
+}
+
+func (handler *AuthHandler) IsExpired(sessionObj *domain.Session) bool {
+	return time.Now().UTC().After(sessionObj.ExpiresAt)
 }

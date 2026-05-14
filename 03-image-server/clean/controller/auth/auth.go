@@ -14,6 +14,7 @@ var (
 	ErrWithJSONFields      = errors.New("Wrong json.")
 	ErrWithAuthToken       = errors.New("No auth token.")
 	ErrWithAuthTokenFormat = errors.New("Wrong auth token format.")
+	ErrSessionExpired      = errors.New("Your session is expired. Please login again.")
 )
 
 type Credentials struct {
@@ -111,7 +112,7 @@ func (controller *AuthController) Middleware() gin.HandlerFunc {
 		}
 
 		token := headerParts[1]
-		_, err := controller.handler.GetSession(token)
+		sessionObj, err := controller.handler.GetSession(token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": err.Error(),
@@ -120,6 +121,13 @@ func (controller *AuthController) Middleware() gin.HandlerFunc {
 			return
 		}
 
+		if controller.handler.IsExpired(sessionObj) {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": ErrSessionExpired.Error(),
+			})
+			c.Abort()
+			return
+		}
 		c.Next()
 	}
 }
