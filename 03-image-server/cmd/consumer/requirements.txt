@@ -1,0 +1,5 @@
+tls-client
+psycopg[binary]
+pika
+boto3
+Pillow
