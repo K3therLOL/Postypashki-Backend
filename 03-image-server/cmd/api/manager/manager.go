@@ -227,6 +227,7 @@ func (api *API) processTask(uuid uuid.UUID, url string) {
 		api.logger.Println(err)
 		return // ? should i do change that
 	}
+	// rabbitmq implementation
 
 	newImg := imaging.ProcessImage(img)
 
