@@ -1,0 +1,90 @@
+services:
+  #web:
+  #  build: .
+  #  ports:
+  #    - "${SERVER_PORT}:${CONTAINER_PORT}"
+  #  environment:
+  #    - SECRET_KEY=${SECRET_KEY}
+  #    - ACCESS_KEY=${ACCESS_KEY}
+  #    - BUCKET=${BUCKET}
+  #    - ENDPOINT=${ENDPOINT}
+  #    - REGION=${REGION}
+  #    - DB_NAME=${DB_NAME}
+  #    - DB_USER=${DB_USER}
+  #    - DB_PASSWORD=${DB_PASSWORD}
+  #    - DB_CONN_STRING=${DB_CONN_STRING}
+  #    - REDIS_HOST=${REDIS_HOST}
+  #  depends_on:
+  #    redis:
+  #      condition: service_healthy
+  #    postgres:
+  #      condition: service_healthy
+  #  command: [
+  #    "./main"
+  #  ]
+  #  restart: "no"
+
+  #migration:
+  #  build: ./shared
+  #  environment:
+  #    - DB_HOST=${DB_HOST}
+  #    - DB_NAME=${DB_NAME}
+  #    - DB_USER=${DB_USER}
+  #    - DB_PASSWORD=${DB_PASSWORD}
+  #  depends_on:
+  #    postgres:
+  #      condition: service_healthy
+  #  command: [
+  #    "sql-migrate",
+  #    "up",
+  #    "-config=dbconfig.yml",
+  #    "-env=development"
+  #  ]
+  #  restart: "no"
+
+  #redis:
+  #  image: redis:alpine
+  #  healthcheck:
+  #    test: ["CMD", "redis-cli", "ping"]
+  #    interval: 5s
+  #    timeout: 3s
+  #    retries: 5
+  #    start_period: 10s
+      
+  postgres:
+    image: postgres:alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  consumer:
+    build: ./cmd/consumer
+    environment:
+      QUEUE_NAME: ${QUEUE_NAME}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports: 
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      #test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
