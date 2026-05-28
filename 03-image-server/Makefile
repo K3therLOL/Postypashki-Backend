@@ -14,7 +14,7 @@ docker_run:
 .PHONY: clean
 .ONESHELL:
 up:
-	docker compose up
+	docker compose up --build
 
 down:
 	docker compose down -v

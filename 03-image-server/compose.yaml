@@ -68,9 +68,11 @@ services:
     build: ./cmd/consumer
     environment:
       QUEUE_NAME: ${QUEUE_NAME}
+      PYTHONUNBUFFERED: 1
     depends_on:
       rabbitmq:
         condition: service_healthy
+      #test: rabbitmq-diagnostics -q ping
       postgres:
         condition: service_healthy
 

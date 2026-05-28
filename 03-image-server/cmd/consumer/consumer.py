@@ -3,9 +3,12 @@
 import pika, os, sys
 
 def main():
+    print("Connecting to rabbitmq...")
     connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
+    print("Connected")
     channel = connection.channel()
     queue_name = os.getenv("QUEUE_NAME")
+    print(f"Queue name is {queue_name}")
     channel.queue_declare(queue=queue_name, durable=True, arguments={"x-queue-type": "quorum"})
 
     def callback(ch, method, properties, body):
@@ -16,7 +19,6 @@ def main():
 
 if __name__ == "__main__":
     try:
-        print("Start consuming")
         main()
     except KeyboardInterrupt:
         print("Interrupted")
