@@ -4,11 +4,13 @@ import boto3
 import uuid
 
 from urllib.parse import urlparse
-from PIL import Image
+from PIL import Image, ImageFilter, ImageOps
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
 
+
 class ImageStorage:
+    # access to s3 and postgres
     def __init__(self, endpoint_url: str, access_key: str, secret_key: str, bucket: str, db_url: str):
         self.bucket = bucket
         self.s3 = boto3.client(
@@ -21,6 +23,7 @@ class ImageStorage:
         self.db = psycopg.connect(db_url)
 
 
+    # uploading to s3
     def save(self, img: Image.Image):
         key = f"images/{uuid.uuid4()}"
 
@@ -54,6 +57,7 @@ class ImageStorage:
         self.db.commit()
 
 
+# downloading using tls_client to prevent server blocks
 def download(url: str) -> Image.Image:
     session = tls_client.Session(
         client_identifier="chrome_120",
@@ -75,7 +79,21 @@ def download(url: str) -> Image.Image:
     return Image.open(BytesIO(resp.content))
 
 
-def process(img: Image.Image, filter: str, **args: dict[str, str]) -> Image.Image:
-    # TO DO
-    return img
+def process(img: Image.Image, filter: str, **args: int) -> Image.Image:
+    new_img = img.copy()
+    match filter:
+        case sharp if sharp.lower().startswith("sharp"):
+            new_img = new_img.filter(ImageFilter.UnsharpMask(**args))
+        case neg if neg.lower().startswith("neg"):
+            new_img = ImageOps.invert(new_img.convert("RGB"))
+        case blur if blur.lower() == "blur":
+            new_img = new_img.filter(ImageFilter.GaussianBlur(**args))
+        case proj if proj.lower() == "projection":
+            new_img = new_img.transpose(Image.FLIP_LEFT_RIGHT)
+        case gray if gray.lower() == "grayscale":
+            new_img = new_img.convert("L")
+        case _:
+            pass
 
+    img.show()
+    return new_img

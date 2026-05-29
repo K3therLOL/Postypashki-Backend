@@ -1,12 +1,12 @@
 package domain
 
 type User struct {
-	Username string
+	Username     string
 	PasswordHash string
 }
 
 func NewUser(username, passwordHash string) *User {
-	return &User{ Username: username, PasswordHash: passwordHash }
+	return &User{Username: username, PasswordHash: passwordHash}
 }
 
 type UserRepository interface {

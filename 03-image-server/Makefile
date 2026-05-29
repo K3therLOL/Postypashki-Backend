@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 IMAGE = taskserver
 
-all: run
+all: up
 
 cert:
 	go run $$(go env GOROOT)/src/crypto/tls/generate_cert.go --host localhost
