@@ -2,16 +2,18 @@ import tls_client
 import psycopg
 import boto3
 import uuid
+import requests
 
 from urllib.parse import urlparse
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageFilter, ImageOps, ImageFile
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
 
+ImageFile.LOAD_TRUNCATED_IMAGES=True
 
-class ImageStorage:
+class Storage:
     # access to s3 and postgres
-    def __init__(self, endpoint_url: str, access_key: str, secret_key: str, bucket: str, db_url: str):
+    def __init__(self, endpoint_url: str, access_key: str, secret_key: str, bucket: str, db_dsn: str):
         self.bucket = bucket
         self.s3 = boto3.client(
             "s3",
@@ -20,7 +22,7 @@ class ImageStorage:
             secret_key=secret_key
         )
 
-        self.db = psycopg.connect(db_url)
+        self.db = psycopg.connect(db_dsn)
 
 
     # uploading to s3
@@ -65,20 +67,24 @@ def download(url: str) -> Image.Image:
     )
 
     parsed_url = urlparse(url)
-    session.headers.update({
-        "Host": f"cdn.{parsed_url}",
+    headers = {
+        "Host": parsed_url.netloc,
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:149.0) Gecko/20100101 Firefox/149.0",
         "Accept": "image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate, br, zstd",
-        "Referer": f"https://{parsed_url}",
-    })
+        "Referer": f"{parsed_url.scheme}://{parsed_url.netloc}/",
+    }
 
-    resp = session.get(url, timeout=10)
+    tls_resp = session.get(url, headers=headers, timeout_seconds=10)
+    cookies = {c.name: c.value for c in tls_resp.cookies}
+    resp = requests.get(url, headers=headers, cookies=cookies, timeout=10)
     resp.raise_for_status()
+
     return Image.open(BytesIO(resp.content))
 
 
+# image processing function
 def process(img: Image.Image, filter: str, **args: int) -> Image.Image:
     new_img = img.copy()
     match filter:
