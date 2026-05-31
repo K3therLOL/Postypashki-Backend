@@ -5,21 +5,21 @@ import uuid
 import requests
 
 from urllib.parse import urlparse
-from PIL import Image, ImageFilter, ImageOps, ImageFile
+from PIL import Image, ImageFilter, ImageOps
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
 
-ImageFile.LOAD_TRUNCATED_IMAGES=True
 
 class Storage:
     # access to s3 and postgres
-    def __init__(self, endpoint_url: str, access_key: str, secret_key: str, bucket: str, db_dsn: str):
+    def __init__(self, endpoint_url: str, access_key: str, secret_key: str, bucket: str, region: str, db_dsn: str):
         self.bucket = bucket
         self.s3 = boto3.client(
             "s3",
             endpoint_url=endpoint_url,
-            access_key=access_key,
-            secret_key=secret_key
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region
         )
 
         self.db = psycopg.connect(db_dsn)
@@ -80,6 +80,10 @@ def download(url: str) -> Image.Image:
     cookies = {c.name: c.value for c in tls_resp.cookies}
     resp = requests.get(url, headers=headers, cookies=cookies, timeout=10)
     resp.raise_for_status()
+
+    content_type = resp.headers.get("content-type", "")
+    if not content_type.startswith("image/"):
+        raise ValueError(f"Expected image, instead got {content_type}")
 
     return Image.open(BytesIO(resp.content))
 
