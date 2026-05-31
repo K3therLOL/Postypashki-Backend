@@ -254,15 +254,29 @@ func (api *API) processTask(uuid uuid.UUID, url string) {
 func (api *API) ExecuteTask(c *gin.Context) {
 	taskID := uuid.New()
 
-	req := imgUrl{}
-	if err := c.ShouldBindJSON(&req); err != nil {
+	//	req := imgUrl{}
+	//	if err := c.ShouldBindJSON(&req); err != nil {
+	//		c.JSON(http.StatusBadRequest, gin.H{
+	//			"error": err.Error(),
+	//		})
+	//		return
+	//	}
+
+	body, err := c.GetRawData()
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 
-	go api.processTask(taskID, req.Url)
+	err = api.brockerInteractor.Send(string(body))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
 
 	if err := api.taskInteractor.SaveTask(taskID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
