@@ -1,28 +1,32 @@
 services:
-  #web:
-  #  build: .
-  #  ports:
-  #    - "${SERVER_PORT}:${CONTAINER_PORT}"
-  #  environment:
-  #    - SECRET_KEY=${SECRET_KEY}
-  #    - ACCESS_KEY=${ACCESS_KEY}
-  #    - BUCKET=${BUCKET}
-  #    - ENDPOINT=${ENDPOINT}
-  #    - REGION=${REGION}
-  #    - DB_NAME=${DB_NAME}
-  #    - DB_USER=${DB_USER}
-  #    - DB_PASSWORD=${DB_PASSWORD}
-  #    - DB_CONN_STRING=${DB_CONN_STRING}
-  #    - REDIS_HOST=${REDIS_HOST}
-  #  depends_on:
-  #    redis:
-  #      condition: service_healthy
-  #    postgres:
-  #      condition: service_healthy
-  #  command: [
-  #    "./main"
-  #  ]
-  #  restart: "no"
+  api:
+    build: ./cmd/api
+    ports:
+      - "${SERVER_PORT}:${CONTAINER_PORT}"
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - ACCESS_KEY=${ACCESS_KEY}
+      - BUCKET=${BUCKET}
+      - ENDPOINT=${ENDPOINT}
+      - REGION=${REGION}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_CONN_STRING=${DB_CONN_STRING}
+      - REDIS_HOST=${REDIS_HOST}
+      - BROKER_URI=${BROKER_URI}
+      - QUEUE_NAME=${QUEUE_NAME}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    #command: [
+    #  "/app/main"
+    #]
+    #restart: "no"
 
   #migration:
   #  build: ./shared
@@ -42,15 +46,15 @@ services:
   #  ]
   #  restart: "no"
 
-  #redis:
-  #  image: redis:alpine
-  #  healthcheck:
-  #    test: ["CMD", "redis-cli", "ping"]
-  #    interval: 5s
-  #    timeout: 3s
-  #    retries: 5
-  #    start_period: 10s
-      
+  redis:
+    image: redis:alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+     
   postgres:
     image: postgres:alpine
     environment:
@@ -83,7 +87,6 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-      #test: rabbitmq-diagnostics -q ping
       postgres:
         condition: service_healthy
 
@@ -97,7 +100,6 @@ services:
       RABBITMQ_DEFAULT_PASS: guest
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      #test: rabbitmq-diagnostics -q ping
       interval: 30s
       timeout: 30s
       retries: 3

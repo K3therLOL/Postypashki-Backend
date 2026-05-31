@@ -17,7 +17,8 @@ import (
 	"time"
 
 	"taskserver/clean/composure"
-	usecase "taskserver/clean/usecase/task"
+	brockerUsecase "taskserver/clean/usecase/brocker"
+	taskUsecase "taskserver/clean/usecase/task"
 	"taskserver/imaging"
 
 	fhttp "github.com/bogdanfinn/fhttp"
@@ -36,10 +37,11 @@ import (
 )
 
 type API struct {
-	client     *http.Client
-	logger     *log.Logger
-	s3Client   *s3.Client
-	interactor *usecase.TaskInteractor
+	client            *http.Client
+	logger            *log.Logger
+	s3Client          *s3.Client
+	taskInteractor    *taskUsecase.TaskInteractor
+	brockerInteractor *brockerUsecase.BrockerInteractor
 }
 
 type imgUrl struct {
@@ -88,9 +90,10 @@ func NewAPI() *API {
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		logger:     log.New(os.Stdout, "api: ", log.Ldate|log.Ltime),
-		s3Client:   confS3Client(),
-		interactor: composure.NewTaskInteractor(),
+		logger:            log.New(os.Stdout, "api: ", log.Ldate|log.Ltime),
+		s3Client:          confS3Client(),
+		taskInteractor:    composure.NewTaskInteractor(),
+		brockerInteractor: composure.NewBrockerInteractor(),
 	}
 	return api
 }
@@ -239,12 +242,12 @@ func (api *API) processTask(uuid uuid.UUID, url string) {
 
 	api.logger.Printf("Image uploaded to %s\n.", imgUrl)
 
-	if err := api.interactor.SaveResult(uuid.String(), imgUrl); err != nil {
+	if err := api.taskInteractor.SaveResult(uuid.String(), imgUrl); err != nil {
 		api.logger.Println(err)
 		return
 	}
 	api.logger.Println(uuid.String())
-	api.interactor.UpdateTaskStatus(uuid)
+	api.taskInteractor.UpdateTaskStatus(uuid)
 }
 
 // Image processing
@@ -261,7 +264,7 @@ func (api *API) ExecuteTask(c *gin.Context) {
 
 	go api.processTask(taskID, req.Url)
 
-	if err := api.interactor.SaveTask(taskID); err != nil {
+	if err := api.taskInteractor.SaveTask(taskID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": taskID.String(),
 		})
@@ -283,7 +286,7 @@ func (api *API) GetTaskStatus(c *gin.Context) {
 		return
 	}
 
-	status, err := api.interactor.GetTaskStatus(uuid)
+	status, err := api.taskInteractor.GetTaskStatus(uuid)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": ErrStatusAccess.Error(),
@@ -299,7 +302,7 @@ func (api *API) GetTaskStatus(c *gin.Context) {
 func (api *API) GetTaskResult(c *gin.Context) {
 	taskID := c.Param("task_id")
 
-	imgUrl, err := api.interactor.GetResult(taskID)
+	imgUrl, err := api.taskInteractor.GetResult(taskID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": ErrTaskNotCompleted.Error(),

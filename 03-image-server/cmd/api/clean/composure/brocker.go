@@ -2,7 +2,7 @@ package composure
 
 import (
 	"os"
-	brocker "taskserver/brocker/rabbitmq"
+	brocker "taskserver/brocker/rabbitmq/0.9"
 	usecase "taskserver/clean/usecase/brocker"
 )
 

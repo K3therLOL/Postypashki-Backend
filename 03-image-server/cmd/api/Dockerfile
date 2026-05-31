@@ -13,3 +13,5 @@ COPY --from=builder /build/migrations ./migrations
 COPY --from=builder /build/dbconfig.yml .
 COPY --from=builder /build/main .
 RUN go run $(go env GOROOT)/src/crypto/tls/generate_cert.go --host localhost
+
+CMD ["./main"]
