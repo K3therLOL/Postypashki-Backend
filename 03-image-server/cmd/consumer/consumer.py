@@ -6,13 +6,15 @@ from image.image import Storage, download, process
 
 def test_image():
     print("test_image started")
-    #endpoint_url = os.getenv("ENDPOINT", "")
-    #access_key = os.getenv("ACCESS_KEY", "")
-    #secret_key = os.getenv("SECRET_KEY", "")
-    #bucket = os.getenv("BUCKET", "")
-    #db_dsn = os.getenv("DB_CONN_STRING", "")
+    endpoint_url = os.getenv("ENDPOINT", "")
+    print("endpoint" + endpoint_url)
+    access_key = os.getenv("ACCESS_KEY", "")
+    secret_key = os.getenv("SECRET_KEY", "")
+    bucket = os.getenv("BUCKET", "")
+    region = os.getenv("REGION", "")
+    db_dsn = os.getenv("DB_CONN_STRING", "")
 
-    #storage = Storage(endpoint_url, access_key, secret_key, bucket, db_dsn)
+    storage = Storage(endpoint_url, access_key, secret_key, bucket, region, db_dsn)
     img_url = "https://upload.wikimedia.org/wikipedia/commons/e/eb/Hawksbill_sea_turtle_-_NOAA.jpg"
     img_src = download(img_url)
     print(img_src)

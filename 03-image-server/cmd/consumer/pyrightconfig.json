@@ -1,0 +1,5 @@
+{
+  "pythonPath": "/usr/bin/python3",
+  "extraPaths": ["."],
+  "typeCheckingMode": "basic"
+}
