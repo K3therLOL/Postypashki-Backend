@@ -262,7 +262,7 @@ func (api *API) ExecuteTask(c *gin.Context) {
 	//		return
 	//	}
 
-	body, err := c.GetRawData()
+	jsonString, err := c.GetRawData()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -270,7 +270,7 @@ func (api *API) ExecuteTask(c *gin.Context) {
 		return
 	}
 
-	err = api.brockerInteractor.Send(string(body))
+	err = api.brockerInteractor.Send(string(jsonString))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
