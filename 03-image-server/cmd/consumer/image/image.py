@@ -38,7 +38,7 @@ class Storage:
             key
         )
 
-        url = self.s3.generate_presigned_url(
+        saved_img_url = self.s3.generate_presigned_url(
             "get_object",
             Params={
                 "Bucket": self.bucket,
@@ -53,7 +53,7 @@ class Storage:
                 INSERT INTO images (url, expires_at)
                 VALUES (%s, %s)
                 """,
-                (url, expires_at)
+                (saved_img_url, expires_at)
             )
 
         self.db.commit()
