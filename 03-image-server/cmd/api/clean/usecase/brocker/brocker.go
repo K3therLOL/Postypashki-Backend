@@ -13,7 +13,3 @@ func NewBrockerInteractor(provider domain.BrockerProvider) *BrockerInteractor {
 func (interactor *BrockerInteractor) Send(message string) error {
 	return interactor.provider.Send(message)
 }
-
-func (interactor *BrockerInteractor) Recv() (string, error) {
-	return interactor.provider.Recv()
-}

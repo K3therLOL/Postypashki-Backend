@@ -1,5 +1,5 @@
 package domain
 
 type BrockerProvider interface {
-	Send(message string) error
+	Send(body string) error
 }
