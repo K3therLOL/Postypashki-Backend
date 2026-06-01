@@ -16,6 +16,6 @@ type TaskRepository interface {
 }
 
 type ResultRepository interface {
-	Get(key string) (string, error)
-	Set(key, value string) error
+	Get(uuid string) (string, error)
+	Set(uuid, imgUrl string) error
 }
