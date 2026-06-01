@@ -37,10 +37,10 @@ func NewResultRepository(storageTime int) *ResultRepository {
 	}
 }
 
-func (r *ResultRepository) Get(key string) (string, error) {
-	return r.cache.Get(r.ctx, key).Result()
+func (r *ResultRepository) Get(uuid string) (string, error) {
+	return r.cache.Get(r.ctx, uuid).Result()
 }
 
-func (r *ResultRepository) Set(key, value string) error {
-	return r.cache.Set(r.ctx, key, value, r.storageTime).Err()
+func (r *ResultRepository) Set(uuid, imgUrl string) error {
+	return r.cache.Set(r.ctx, uuid, imgUrl, r.storageTime).Err()
 }
