@@ -74,6 +74,6 @@ func (imageRepo *ImageRepository) Get(uuid string) (string, error) {
 	return imageUrl, nil
 }
 
-func (imageRepo *ImageRepository) Set(uuid, imageUrl string) (string, error) {
-	return "", nil
+func (imageRepo *ImageRepository) Set(uuid, imageUrl string) error {
+	return nil
 }
