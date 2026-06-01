@@ -250,6 +250,14 @@ func (api *API) processTask(uuid uuid.UUID, url string) {
 	api.taskInteractor.UpdateTaskStatus(uuid)
 }
 
+type ImageObject struct {
+	url        string
+	uuid       string
+	filter     string
+	parameters struct {
+	}
+}
+
 // Image processing
 func (api *API) ExecuteTask(c *gin.Context) {
 	taskID := uuid.New()
