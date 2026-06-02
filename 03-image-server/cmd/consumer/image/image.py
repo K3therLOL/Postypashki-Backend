@@ -26,7 +26,7 @@ class Storage:
 
 
     # uploading to s3
-    def save(self, img: Image.Image):
+    def save(self, img: Image.Image, task_id: str):
         key = f"images/{uuid.uuid4()}"
 
         buffer = BytesIO()
@@ -50,10 +50,10 @@ class Storage:
         with self.db.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO images (url, expires_at)
-                VALUES (%s, %s)
+                INSERT INTO images (url, task_id, expires_at)
+                VALUES (%s, %s, %s)
                 """,
-                (saved_img_url, expires_at)
+                (saved_img_url, task_id, expires_at)
             )
 
         self.db.commit()
