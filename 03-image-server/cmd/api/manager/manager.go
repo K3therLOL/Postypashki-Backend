@@ -3,6 +3,7 @@ package manager
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -44,20 +45,17 @@ type API struct {
 	brockerInteractor *brockerUsecase.BrockerInteractor
 }
 
-type imgUrl struct {
-	Url string `json:"url"`
-}
-
 var (
-	ErrWrongTaskID      = errors.New("Invalid task_id.")
-	ErrStatusAccess     = errors.New("Could not get status.")
-	ErrSaveTaskID       = errors.New("Could not save task_id.")
-	ErrNoConnection     = errors.New("Check connection to internet.")
-	ErrWithResp         = errors.New("Response ended with error.")
-	ErrNotImage         = errors.New("No image returned from response.")
-	ErrImgProc          = errors.New("Image processing failed.")
-	ErrReqCreation      = errors.New("Could not create a request handler.")
-	ErrTaskNotCompleted = errors.New("Task not completed yet.")
+	ErrWrongTaskID       = errors.New("Invalid task_id.")
+	ErrStatusAccess      = errors.New("Could not get status.")
+	ErrSaveTaskID        = errors.New("Could not save task_id.")
+	ErrNoConnection      = errors.New("Check connection to internet.")
+	ErrWithResp          = errors.New("Response ended with error.")
+	ErrNotImage          = errors.New("No image returned from response.")
+	ErrImgProc           = errors.New("Image processing failed.")
+	ErrReqCreation       = errors.New("Could not create a request handler.")
+	ErrTaskNotCompleted  = errors.New("Task not completed yet.")
+	ErrEmptyNeededFields = errors.New("Needed arguments (url or filter) not provided.")
 )
 
 func confS3Client() *s3.Client {
@@ -250,27 +248,36 @@ func (api *API) processTask(uuid uuid.UUID, url string) {
 	api.taskInteractor.UpdateTaskStatus(uuid)
 }
 
-type ImageObject struct {
-	url        string
-	uuid       string
-	filter     string
-	parameters struct {
-	}
+type ImageDTO struct {
+	ImageUrl   string          `json:"image_url"`
+	TaskID     string          `json:"task_id"`
+	Filter     string          `json:"filter"`
+	Parameters json.RawMessage `json:"parameters"`
 }
 
 // Image processing
 func (api *API) ExecuteTask(c *gin.Context) {
 	taskID := uuid.New()
 
-	//	req := imgUrl{}
-	//	if err := c.ShouldBindJSON(&req); err != nil {
-	//		c.JSON(http.StatusBadRequest, gin.H{
-	//			"error": err.Error(),
-	//		})
-	//		return
-	//	}
+	req := ImageDTO{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
 
-	jsonString, err := c.GetRawData()
+	if req.ImageUrl == "" || req.Filter == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": ErrEmptyNeededFields,
+		})
+		return
+	}
+
+	// added task_id to json
+	req.TaskID = taskID.String()
+
+	jsonString, err := json.Marshal(req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
