@@ -17,20 +17,23 @@ storage = Storage(
 def test_image():
     print("test_image started")
 
-    img_url = "https://upload.wikimedia.org/wikipedia/commons/e/eb/Hawksbill_sea_turtle_-_NOAA.jpg"
+    img_url = "https://i.ytimg.com/vi/fbByrLJ3ehw/maxresdefault.jpg"
     img_src = download(img_url)
     print(img_src)
     new_img = process(img_src, "sharpen")
     print(new_img)
-
     #storage.save(new_img)
 
 
 def execute_image_pipeline(body: str):
     img_attrs = json.loads(body)
     img_src = download(img_attrs["image_url"])
-    new_img = process(img_src, img_attrs["filter"], **img_attrs["parameters"])
-    storage.save(new_img)
+
+    params = img_attrs.get("parameters")
+    if params is None:
+        params = {}
+    new_img = process(img_src, img_attrs["filter"], **params)
+    storage.save(new_img, img_attrs["task_id"])
 
 
 def main():
