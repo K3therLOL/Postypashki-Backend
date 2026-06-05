@@ -30,12 +30,17 @@ class Storage:
         key = f"images/{uuid.uuid4()}"
 
         buffer = BytesIO()
-        img.save(buffer)
+        fmt = img.format or "PNG"
+        img.save(buffer, format=fmt)
         buffer.seek(0)
         self.s3.upload_fileobj(
             buffer,
             self.bucket,
-            key
+            key,
+            ExtraArgs={
+                "ContentType": f"image/{fmt}",
+                "ContentDisposition": "inline",
+            },
         )
 
         saved_img_url = self.s3.generate_presigned_url(
@@ -44,8 +49,10 @@ class Storage:
                 "Bucket": self.bucket,
                 "Key": key,
             },
+            ExpiresIn=3600,
         )
 
+        print(f"saved img url {saved_img_url}")
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=60)
         with self.db.cursor() as cur:
             cur.execute(
