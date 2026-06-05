@@ -23,28 +23,27 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    #command: [
-    #  "/app/main"
-    #]
-    #restart: "no"
+      migration:
+        condition: service_completed_successfully
 
-  #migration:
-  #  build: ./shared
-  #  environment:
-  #    - DB_HOST=${DB_HOST}
-  #    - DB_NAME=${DB_NAME}
-  #    - DB_USER=${DB_USER}
-  #    - DB_PASSWORD=${DB_PASSWORD}
-  #  depends_on:
-  #    postgres:
-  #      condition: service_healthy
-  #  command: [
-  #    "sql-migrate",
-  #    "up",
-  #    "-config=dbconfig.yml",
-  #    "-env=development"
-  #  ]
-  #  restart: "no"
+
+  migration:
+    build: ./migration
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: [
+      "sql-migrate",
+      "up",
+      "-config=dbconfig.yml",
+      "-env=development"
+    ]
+    restart: "no"
 
   redis:
     image: redis:alpine
@@ -89,6 +88,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      migration:
+        condition: service_completed_successfully
 
   rabbitmq:
     image: rabbitmq:3-management
