@@ -38,7 +38,7 @@ func NewRabbitProducer(brokerURI string) *RabbitProducer {
 	}
 
 	queueName := os.Getenv("QUEUE_NAME")
-	producer.logger.Printf("Queue name is %s\n", queueName)
+	producer.logger.Printf("Queue name --- %s\n", queueName)
 	q, err := ch.QueueDeclare(
 		queueName,
 		true,  // durability
