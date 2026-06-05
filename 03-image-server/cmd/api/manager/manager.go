@@ -252,7 +252,7 @@ type ImageDTO struct {
 	ImageUrl   string          `json:"image_url"`
 	TaskID     string          `json:"task_id"`
 	Filter     string          `json:"filter"`
-	Parameters json.RawMessage `json:"parameters"`
+	Parameters json.RawMessage `json:"parameters,omitempty"`
 }
 
 // Image processing
@@ -269,7 +269,7 @@ func (api *API) ExecuteTask(c *gin.Context) {
 
 	if req.ImageUrl == "" || req.Filter == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": ErrEmptyNeededFields,
+			"error": ErrEmptyNeededFields.Error(),
 		})
 		return
 	}
@@ -322,6 +322,8 @@ func (api *API) GetTaskStatus(c *gin.Context) {
 		})
 		return
 	}
+
+	api.logger.Printf("status is %s\n", status)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": status,
