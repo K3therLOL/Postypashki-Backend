@@ -16,6 +16,7 @@ services:
       - REDIS_HOST=${REDIS_HOST}
       - BROKER_URI=${BROKER_URI}
       - QUEUE_NAME=${QUEUE_NAME}
+      - REPLY_QUEUE_NAME=${REPLY_QUEUE_NAME}
     depends_on:
       redis:
         condition: service_healthy
@@ -83,6 +84,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_CONN_STRING=${DB_CONN_STRING}
       - PYTHONUNBUFFERED=1
+      - REPLY_QUEUE_NAME=${REPLY_QUEUE_NAME}
     depends_on:
       rabbitmq:
         condition: service_healthy
