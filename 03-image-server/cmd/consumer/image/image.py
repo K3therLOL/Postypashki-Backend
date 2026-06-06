@@ -26,7 +26,7 @@ class Storage:
 
 
     # uploading to s3
-    def save(self, img: Image.Image, task_id: str):
+    def save(self, img: Image.Image, task_id: str) -> dict[str, str]:
         key = f"images/{uuid.uuid4()}"
 
         buffer = BytesIO()
@@ -64,6 +64,10 @@ class Storage:
             )
 
         self.db.commit()
+        return {
+            "status": "ready",
+            "task_id": task_id
+        }
 
 
 # downloading using tls_client to prevent server blocks
