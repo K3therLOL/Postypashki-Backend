@@ -323,8 +323,7 @@ func (api *API) GetTaskStatus(c *gin.Context) {
 		return
 	}
 
-	api.logger.Printf("status is %s\n", status)
-
+	api.logger.Printf("status --- %s\n", status)
 	c.JSON(http.StatusOK, gin.H{
 		"status": status,
 	})
