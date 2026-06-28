@@ -1,0 +1,17 @@
+name: CI
+
+on:
+  - push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setting up python
+        uses: actions/setup-python@v5
+
+      - name: Displaying python version
+        run: python --version
