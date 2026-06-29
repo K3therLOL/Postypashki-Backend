@@ -13,5 +13,22 @@ jobs:
       - name: Setting up python
         uses: actions/setup-python@v5
 
-      - name: Displaying python version
-        run: python --version
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Setting up go
+        uses: actions/setup-go@v6
+
+      - name: Install sql-migrate tool
+        run: go install github.com/rubenv/sql-migrate/...@latest
+
+      - name: Start services
+        working-directory: 03-image-server
+        run: docker compose up -d --build --wait --wait-timeout 120
+
+      - name: Print logs if something went wrong
+        if: failure()
+        run: docker compose logs
+
+      - name: Run integration tests
+        run: pytest
