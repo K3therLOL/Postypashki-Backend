@@ -33,11 +33,14 @@ jobs:
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_HOST: ${{ secrets.DB_HOST }}
           DB_CONN_STRING: ${{ secrets.DB_CONN_STRING }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          CONTAINER_PORT: ${{ secrets.CONTAINER_PORT }}
           REDIS_HOST: ${{ secrets.REDIS_HOST }}
-          BROKER_URI: ${{ secrets.BROKER_URI }}
           QUEUE_NAME: ${{ secrets.QUEUE_NAME }}
           REPLY_QUEUE_NAME: ${{ secrets.REPLY_QUEUE_NAME }}
+          BROKER_URI: ${{ secrets.BROKER_URI }}
         run: docker compose up -d --build --wait --wait-timeout 120
 
       - name: Print logs if something went wrong
