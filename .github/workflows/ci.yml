@@ -45,7 +45,7 @@ jobs:
 
       - name: Print logs if something went wrong
         if: failure()
-        run: docker compose logs
+        run: docker compose logs migration
 
       - name: Run integration tests
         run: pytest
