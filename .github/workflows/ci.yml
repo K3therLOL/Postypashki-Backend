@@ -24,6 +24,20 @@ jobs:
 
       - name: Start services
         working-directory: 03-image-server
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          ACCESS_KEY: ${{ secrets.ACCESS_KEY }}
+          BUCKET: ${{ secrets.BUCKET }}
+          ENDPOINT: ${{ secrets.ENDPOINT }}
+          REGION: ${{ secrets.REGION }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_CONN_STRING: ${{ secrets.DB_CONN_STRING }}
+          REDIS_HOST: ${{ secrets.REDIS_HOST }}
+          BROKER_URI: ${{ secrets.BROKER_URI }}
+          QUEUE_NAME: ${{ secrets.QUEUE_NAME }}
+          REPLY_QUEUE_NAME: ${{ secrets.REPLY_QUEUE_NAME }}
         run: docker compose up -d --build --wait --wait-timeout 120
 
       - name: Print logs if something went wrong
